@@ -75,6 +75,8 @@ class send_events_task extends \core\task\scheduled_task {
             return;
         }
 
+        $this->reactivate_events_with_wallet();
+
         // ── Obtener eventos pendientes ──────────────────────────────────
         // Ordenamos por timecreated para procesar los más antiguos primero.
         $pending = $DB->get_records_select(
@@ -141,4 +143,61 @@ class send_events_task extends \core\task\scheduled_task {
 
         mtrace("MeritCoin: Done. Sent={$sent}, Failed={$failed}.");
     }
+
+        /*
+        * Reactiva eventos pending_wallet cuando el estudiante ya registró una wallet válida.
+        */
+        private function reactivate_events_with_wallet(): void {
+            global $DB;
+
+            $walletfield = get_config('local_meritcoin', 'wallet_field') ?: 'wallet';
+            $fieldid = $DB->get_field('user_info_field', 'id', ['shortname' => $walletfield]);
+
+            if (!$fieldid) {
+                mtrace("MeritCoin: Wallet profile field '{$walletfield}' not found.");
+                return;
+            }
+
+            $records = $DB->get_records_select(
+                'local_meritcoin_queue',
+                "status = :status",
+                ['status' => 'pending_wallet'],
+                'timecreated ASC',
+                '*',
+                0,
+                self::BATCH_SIZE
+            );
+
+            if (empty($records)) {
+                return;
+            }
+
+            foreach ($records as $record) {
+                $wallet = $DB->get_field('user_info_data', 'data', [
+                    'userid'  => $record->userid,
+                    'fieldid' => $fieldid,
+                ]);
+
+                if (empty($wallet) || !preg_match('/^0x[0-9a-fA-F]{40}$/', $wallet)) {
+                    continue;
+                }
+
+               $payload = json_decode($record->payload, true);
+                if (!is_array($payload)) {
+                    $payload = [];
+             }
+
+                $payload['student_wallet'] = $wallet;
+
+                $record->student_wallet = $wallet;
+                $record->payload = json_encode($payload, JSON_UNESCAPED_UNICODE);
+               $record->status = 'pending';
+                $record->timemodified = time();
+                $record->last_error = null;
+
+                $DB->update_record('local_meritcoin_queue', $record);
+
+                mtrace("MeritCoin: Reactivated event {$record->event_id} after wallet registration.");
+            }
+        }
 }
