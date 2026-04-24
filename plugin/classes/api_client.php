@@ -56,8 +56,8 @@ class api_client {
      * No necesitas pasar parámetros manualmente.
      */
     public function __construct() {
-        $this->baseurl    = rtrim(get_config('local_meritcoin', 'api_url'), '/');
-        $this->hmacsecret = get_config('local_meritcoin', 'hmac_secret');
+        $this->baseurl = rtrim((string)(get_config('local_meritcoin', 'api_url') ?: ''), '/');
+        $this->hmacsecret = (string)(get_config('local_meritcoin', 'hmac_secret') ?: '');
     }
 
     /**
@@ -78,6 +78,11 @@ class api_client {
         $result->error       = '';
 
         // Validar configuración.
+        json_decode($jsonpayload, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $result->error = 'Invalid JSON payload: ' . json_last_error_msg();
+            return $result;
+        }
         if (empty($this->baseurl)) {
             $result->error = 'API URL is not configured in plugin settings.';
             return $result;
@@ -102,6 +107,7 @@ class api_client {
         $curl = new \curl();
         $curl->setHeader([
             'Content-Type: application/json',
+            'Accept: application/json',
             'X-HMAC-Signature: ' . $signature,
         ]);
 
@@ -117,7 +123,7 @@ class api_client {
         // ── Procesar respuesta ──────────────────────────────────────────
         $info = $curl->get_info();
         $result->status_code = (int)($info['http_code'] ?? 0);
-        $result->body = $response;
+        $result->body = is_string($response) ? $response : '';
 
         $curlerror = $curl->get_errno();
         if ($curlerror) {
@@ -128,7 +134,13 @@ class api_client {
         if ($result->status_code >= 200 && $result->status_code < 300) {
             $result->success = true;
         } else {
-            $result->error = "HTTP {$result->status_code}: {$response}";
+           $decoded = json_decode($result->body, true);
+            if (is_array($decoded)) {
+                $detail = $decoded['detail'] ?? $decoded['message'] ?? null;
+               $result->error = $detail ? "HTTP {$result->status_code}: {$detail}" : "HTTP {$result->status_code}: {$result->body}";
+            } else {
+               $result->error = "HTTP {$result->status_code}: {$result->body}";
+           }
         }
 
         return $result;
