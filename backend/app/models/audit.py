@@ -9,8 +9,6 @@ CAMBIOS v0.2.0:
 - EventRecord: nuevos campos activity_id, activity_name, coins_amount, coin_symbol
 """
 
-from datetime import datetime
-
 from sqlalchemy import Column, DateTime, Float, String, Text, func
 
 from app.core.database import Base
