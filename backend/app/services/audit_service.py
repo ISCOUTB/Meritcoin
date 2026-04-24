@@ -6,6 +6,7 @@ import logging
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.models.audit import AuditLog, EventRecord
 from app.models.events import AcademicEvent
@@ -21,8 +22,12 @@ async def record_event(db: AsyncSession, event: AcademicEvent) -> None:
         student_id=event.student_id,
         course_id=event.course_id,
         course_name=event.course_name,
+        activity_id=event.activity_id,
+        activity_name=event.activity_name,
         event_type=event.event_type.value,
         grade=event.grade,
+        coins_amount=event.coins_amount,
+        coin_symbol=event.coin_symbol,
     )
     db.add(record)
     await db.flush()
@@ -54,7 +59,6 @@ async def record_audit(
 
 async def event_exists(db: AsyncSession, event_id: str) -> bool:
     """Verifica si un evento ya fue procesado (idempotencia)."""
-    from sqlalchemy import select
     result = await db.execute(
         select(EventRecord.event_id).where(EventRecord.event_id == event_id)
     )
