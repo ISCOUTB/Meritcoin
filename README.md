@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # MeritCoin (MRT) - Sistema de Insignias Digitales Academicas
 
 Sistema hibrido off-chain/on-chain que integra insignias digitales verificables
@@ -225,3 +226,6 @@ Ambos usan solo OpenZeppelin 5.x (sin librerias de pago).
 ## Licencia
 
 Proyecto academico - Universidad Tecnologica de Bolivar, 2026.
+=======
+# Meritcoin
+>>>>>>> 84214f7b62dd8b58eaf58c9138017ad5e363f29c
