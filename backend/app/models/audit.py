@@ -29,7 +29,7 @@ class EventRecord(Base):
     __tablename__ = "events"
 
     event_id        = Column(String(255), primary_key=True)
-    student_wallet  = Column(String(42),  nullable=False, index=True)
+    student_wallet  = Column(String(42),  nullable=True, index=True)
     student_id      = Column(String(255), nullable=False)
     course_id       = Column(String(255), nullable=False)
     course_name     = Column(String(500), default="")
