@@ -26,7 +26,7 @@ defined('MOODLE_INTERNAL') || die();
  * Esta tarea se ejecuta automáticamente cada minuto por el cron de Moodle.
  * Hace lo siguiente:
  *
- *   1. Busca eventos con status='pending' en la tabla local_meritcoin_queue
+ *   1. Primero reactiva eventos pending_wallet con wallet ya disponible; luego procesa eventos pending en la tabla local_meritcoin_queue
  *   2. Para cada evento, lo envía al backend FastAPI usando api_client
  *   3. Si el backend responde OK: marca el evento como 'sent'
  *   4. Si falla: incrementa el contador de intentos y guarda el error
