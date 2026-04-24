@@ -92,5 +92,27 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026031004, 'local', 'meritcoin');
     }
 
+    // ── v0.2.1: soportar pending_wallet e indexar reglas por actividad ──────────
+    if ($oldversion < 2026042401) {
+
+        // 1) Permitir student_wallet null en la cola.
+        $table = new xmldb_table('local_meritcoin_queue');
+        $field = new xmldb_field('student_wallet', XMLDB_TYPE_CHAR, '42', null, null, null, null, 'coins_amount');
+
+        if ($dbman->field_exists($table, $field)) {
+            $dbman->change_field_notnull($table, $field);
+        }
+
+        // 2) Agregar índice compuesto courseid + cmid en reglas.
+        $table = new xmldb_table('local_meritcoin_rules');
+        $index = new xmldb_index('idx_course_cmid', XMLDB_INDEX_NOTUNIQUE, ['courseid', 'cmid']);
+
+        if ($dbman->table_exists($table) && !$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        upgrade_plugin_savepoint(true, 2026042401, 'local', 'meritcoin');
+    }
+
     return true;
 }

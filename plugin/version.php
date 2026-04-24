@@ -14,24 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * Plugin version and other meta-data.
- *
- * CAMBIOS v0.2.0 (2026031004):
- * - Soporte de monedas por actividad individual (itemtype = 'mod')
- * - Nueva tabla local_meritcoin_rules: reglas de recompensa por curso/actividad
- * - Nueva tabla local_meritcoin_course_config: símbolo y contrato por curso
- * - Nuevas columnas en la cola: cmid, activity_name, coins_amount
- *
- * @package local_meritcoin
- * @copyright 2026 Universidad Tecnológica de Bolívar
- * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_meritcoin';
-$plugin->version   = 2026031007;     // YYYYMMDDXX 
+$plugin->version   = 2026042401;     // YYYYMMDDXX 
 $plugin->requires  = 2023100900;     // Moodle 4.3+
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.2.0';
+$plugin->release   = '0.2.1';

@@ -27,12 +27,12 @@
                COMMENT="Calificacion del estudiante"/>
         <FIELD NAME="coins_amount"   TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="false"
                COMMENT="Monedas calculadas segun la regla del curso/actividad"/>
-        <FIELD NAME="student_wallet" TYPE="char"   LENGTH="42"  NOTNULL="true"
-               COMMENT="Ethereum wallet del estudiante"/>
+        <FIELD NAME="student_wallet" TYPE="char" LENGTH="42" NOTNULL="false"
+               COMMENT="Ethereum wallet del estudiante; puede ser null mientras el evento queda pending_wallet"/>
         <FIELD NAME="payload"        TYPE="text"   NOTNULL="true"
                COMMENT="JSON payload completo para el backend"/>
-        <FIELD NAME="status"         TYPE="char"   LENGTH="20"  NOTNULL="true"  DEFAULT="pending"
-               COMMENT="pending, sent, failed"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="pending"
+               COMMENT="pending, pending_wallet, sent, failed"/>
         <FIELD NAME="attempts"       TYPE="int"    LENGTH="3"   NOTNULL="true"  DEFAULT="0"
                COMMENT="Numero de intentos de envio"/>
         <FIELD NAME="last_error"     TYPE="text"   NOTNULL="false"
@@ -77,6 +77,7 @@
       <INDEXES>
         <INDEX NAME="idx_course"   UNIQUE="false" FIELDS="courseid"/>
         <INDEX NAME="idx_cm"       UNIQUE="false" FIELDS="cmid"/>
+        <INDEX NAME="idx_course_cmid" UNIQUE="false" FIELDS="courseid, cmid"/>
       </INDEXES>
     </TABLE>
 
