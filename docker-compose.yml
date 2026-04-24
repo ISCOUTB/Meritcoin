@@ -1,0 +1,130 @@
+##############################################################################
+# MeritCoin — Docker Compose: Moodle + MariaDB + PostgreSQL
+#
+# Uso:
+#   cp .env.example .env          # Ajusta si quieres otros passwords
+#   docker compose up -d          # Levanta los 3 servicios
+#   Abre http://localhost:8080    # Moodle (primera carga ~3-5 min)
+#
+# Notas:
+#   - Desde agosto 2025, las imágenes Bitnami se movieron a bitnamilegacy/.
+#   - Es IMPORTANTE usar MariaDB de bitnamilegacy (no la oficial de Docker)
+#     porque la imagen de Moodle Bitnami depende de rutas y scripts
+#     específicos de la MariaDB Bitnami (/bitnami/mariadb, healthcheck.sh).
+#   - Moodle se instala automáticamente en el primer arranque.
+#   - El volumen ./plugin se monta en /bitnami/moodle/local/meritcoin.
+#   - PostgreSQL se usa para el backend FastAPI (Fase 3).
+##############################################################################
+
+services:
+  # ── MariaDB (base de datos de Moodle) ────────────────────────────────────
+  mariadb:
+    image: bitnamilegacy/mariadb:10.11.9
+    container_name: meritcoin-mariadb
+    restart: unless-stopped
+    environment:
+      ALLOW_EMPTY_PASSWORD: "no"
+      MARIADB_USER: ${MOODLE_DB_USER:-bn_moodle}
+      MARIADB_PASSWORD: ${MOODLE_DB_PASSWORD:-moodle_pass}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-root_pass}
+      MARIADB_DATABASE: ${MOODLE_DB_NAME:-bitnami_moodle}
+      MARIADB_CHARACTER_SET: utf8mb4
+      MARIADB_COLLATE: utf8mb4_unicode_ci
+    volumes:
+      - mariadb_data:/bitnami/mariadb
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/mariadb/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - meritcoin-net
+
+  # ── Moodle 4.3 (LMS) ────────────────────────────────────────────────────
+  moodle:
+    image: bitnamilegacy/moodle:4.3.8
+    container_name: meritcoin-moodle
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      MOODLE_DATABASE_HOST: mariadb
+      MOODLE_DATABASE_PORT_NUMBER: 3306
+      MOODLE_DATABASE_USER: ${MOODLE_DB_USER:-bn_moodle}
+      MOODLE_DATABASE_PASSWORD: ${MOODLE_DB_PASSWORD:-moodle_pass}
+      MOODLE_DATABASE_NAME: ${MOODLE_DB_NAME:-bitnami_moodle}
+      MOODLE_USERNAME: ${MOODLE_ADMIN_USER:-admin}
+      MOODLE_PASSWORD: ${MOODLE_ADMIN_PASSWORD:-Admin1234!}
+      MOODLE_EMAIL: ${MOODLE_ADMIN_EMAIL:-admin@meritcoin.local}
+      MOODLE_SITE_NAME: "MeritCoin - Plataforma Academica"
+      MOODLE_SKIP_BOOTSTRAP: "no"
+    ports:
+      - "${MOODLE_PORT:-8080}:8080"
+      - "${MOODLE_HTTPS_PORT:-8443}:8443"
+    volumes:
+      - moodle_data:/bitnami/moodle
+      - moodledata:/bitnami/moodledata
+      # ── Monta la carpeta del plugin para desarrollo en vivo ──
+      # IMPORTANTE: Moodle DEBE haber completado la instalación inicial
+      # antes de montar este volumen. Si es la primera vez que levantas
+      # Moodle, comenta esta línea, deja que instale, luego descomenta.
+      - ./plugin:/bitnami/moodle/local/meritcoin
+    networks:
+      - meritcoin-net
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        chown -R daemon:daemon /bitnami/moodledata && chmod -R 777 /bitnami/moodledata || true
+        /opt/bitnami/scripts/moodle/entrypoint.sh /opt/bitnami/scripts/moodle/run.sh
+
+  # ── PostgreSQL 16 (base de datos del backend FastAPI) ────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: meritcoin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-meritcoin}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-meritcoin_pass}
+      POSTGRES_DB: ${PG_DB:-meritcoin_db}
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-meritcoin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - meritcoin-net
+
+  # ── Backend FastAPI (MeritCoin) ─────────────────────────────────────────
+  backend:
+    build: ./backend          
+    container_name: meritcoin-backend
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app        
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env        
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - meritcoin-net
+
+volumes:
+  mariadb_data:
+  moodle_data:
+  moodledata:
+  postgres_data:
+
+networks:
+  meritcoin-net:
+    driver: bridge

@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/meritcoin/db" VERSION="2026031004" COMMENT="MeritCoin plugin tables"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
+  <TABLES>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         Cola de eventos pendientes de envío al backend.
+         El observer encola aquí y la tarea programada los envía.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <TABLE NAME="local_meritcoin_queue" COMMENT="Queue of academic events to send to MeritCoin backend">
+      <FIELDS>
+        <FIELD NAME="id"             TYPE="int"    LENGTH="10"  NOTNULL="true"  SEQUENCE="true"/>
+        <FIELD NAME="event_id"       TYPE="char"   LENGTH="255" NOTNULL="true"
+               COMMENT="Unique event ID for idempotency"/>
+        <FIELD NAME="userid"         TYPE="int"    LENGTH="10"  NOTNULL="true"
+               COMMENT="Moodle user ID"/>
+        <FIELD NAME="courseid"       TYPE="int"    LENGTH="10"  NOTNULL="true"
+               COMMENT="Moodle course ID"/>
+        <FIELD NAME="cmid"           TYPE="int"    LENGTH="10"  NOTNULL="false"
+               COMMENT="Course module ID (null = calificacion final del curso)"/>
+        <FIELD NAME="activity_name"  TYPE="char"   LENGTH="255" NOTNULL="false" DEFAULT=""
+               COMMENT="Nombre de la actividad o del curso"/>
+        <FIELD NAME="event_type"     TYPE="char"   LENGTH="50"  NOTNULL="true"
+               COMMENT="completion o grade"/>
+        <FIELD NAME="grade"          TYPE="number" LENGTH="10"  DECIMALS="5" NOTNULL="false"
+               COMMENT="Calificacion del estudiante"/>
+        <FIELD NAME="coins_amount"   TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="false"
+               COMMENT="Monedas calculadas segun la regla del curso/actividad"/>
+        <FIELD NAME="student_wallet" TYPE="char"   LENGTH="42"  NOTNULL="true"
+               COMMENT="Ethereum wallet del estudiante"/>
+        <FIELD NAME="payload"        TYPE="text"   NOTNULL="true"
+               COMMENT="JSON payload completo para el backend"/>
+        <FIELD NAME="status"         TYPE="char"   LENGTH="20"  NOTNULL="true"  DEFAULT="pending"
+               COMMENT="pending, sent, failed"/>
+        <FIELD NAME="attempts"       TYPE="int"    LENGTH="3"   NOTNULL="true"  DEFAULT="0"
+               COMMENT="Numero de intentos de envio"/>
+        <FIELD NAME="last_error"     TYPE="text"   NOTNULL="false"
+               COMMENT="Ultimo error del backend"/>
+        <FIELD NAME="timecreated"    TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="timemodified"   TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_event_id" UNIQUE="true"  FIELDS="event_id" COMMENT="Idempotencia"/>
+        <INDEX NAME="idx_status"   UNIQUE="false" FIELDS="status"/>
+        <INDEX NAME="idx_userid"   UNIQUE="false" FIELDS="userid"/>
+      </INDEXES>
+    </TABLE>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         Reglas de recompensa por curso y/o actividad.
+         Si cmid es NULL, la regla aplica a todo el curso.
+         Si cmid tiene valor, aplica solo a esa actividad.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <TABLE NAME="local_meritcoin_rules" COMMENT="Reward rules per course and activity">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid"     TYPE="int"    LENGTH="10"  NOTNULL="true"
+               COMMENT="ID del curso al que aplica esta regla"/>
+        <FIELD NAME="cmid"         TYPE="int"    LENGTH="10"  NOTNULL="false"
+               COMMENT="ID del course module. NULL = regla para todo el curso"/>
+        <FIELD NAME="coins_fixed"  TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="false"
+               COMMENT="Monedas fijas al completar o calificar (ej: 10 monedas por entregar)"/>
+        <FIELD NAME="coins_pct"    TYPE="number" LENGTH="5"   DECIMALS="2" NOTNULL="false"
+               COMMENT="Porcentaje de la nota convertido en monedas (ej: 0.5 = nota*0.5)"/>
+        <FIELD NAME="min_grade"    TYPE="number" LENGTH="10"  DECIMALS="5" NOTNULL="true" DEFAULT="0"
+               COMMENT="Nota minima para ganar monedas"/>
+        <FIELD NAME="timecreated"  TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="timemodified" TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_course"   UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="idx_cm"       UNIQUE="false" FIELDS="cmid"/>
+      </INDEXES>
+    </TABLE>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         Configuracion de moneda por curso.
+         Permite que cada curso tenga su propio nombre/simbolo de moneda
+         y un contrato inteligente especifico.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <TABLE NAME="local_meritcoin_course_config" COMMENT="Per-course coin configuration">
+      <FIELDS>
+        <FIELD NAME="id"               TYPE="int"  LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid"         TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="coin_name"        TYPE="char" LENGTH="50"  NOTNULL="true" DEFAULT="MeritCoin"
+               COMMENT="Nombre de la moneda (ej: BioToken, MathCoin)"/>
+        <FIELD NAME="coin_symbol"      TYPE="char" LENGTH="10"  NOTNULL="true" DEFAULT="MRT"
+               COMMENT="Simbolo de la moneda (ej: BIO, MTH)"/>
+        <FIELD NAME="contract_address" TYPE="char" LENGTH="42"  NOTNULL="false" DEFAULT=""
+               COMMENT="Direccion del contrato ERC-20 especifico del curso (opcional)"/>
+        <FIELD NAME="timecreated"      TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="timemodified"     TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary"          TYPE="primary" FIELDS="id"/>
+        <KEY NAME="uq_courseid"      TYPE="unique"  FIELDS="courseid"/>
+      </KEYS>
+    </TABLE>
+
+  </TABLES>
+</XMLDB>

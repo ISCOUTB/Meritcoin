@@ -1,0 +1,41 @@
+# ── Entorno ────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.production
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+
+# ── Node / Hardhat ────────────────────────────────────────────────────────
+node_modules/
+contracts/cache/
+contracts/artifacts/
+contracts/typechain-types/
+
+# ── Docker ────────────────────────────────────────────────────────────────
+# Los volúmenes se gestionan por Docker, no se versionan
+
+# ── IDEs ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────────────────────────────────
+*.log
+
+# ── Cobertura y tests ─────────────────────────────────────────────────────
+.coverage
+htmlcov/
+coverage/
+.pytest_cache/

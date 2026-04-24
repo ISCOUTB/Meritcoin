@@ -1,0 +1,136 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+namespace local_meritcoin;
+
+defined('MOODLE_INTERNAL') || die();
+
+/**
+ * HTTP client for communicating with the MeritCoin FastAPI backend.
+ *
+ * CÓMO FUNCIONA (explicación para no-expertos en Moodle):
+ * ─────────────────────────────────────────────────────────
+ * Esta clase se encarga de enviar los eventos al backend FastAPI.
+ * Cada petición lleva una firma HMAC-SHA256 en el header para que el
+ * backend pueda verificar que realmente viene de Moodle (y no de un
+ * atacante). El proceso es:
+ *
+ *   1. Tomar el payload JSON del evento
+ *   2. Calcular HMAC-SHA256 usando el secreto compartido
+ *   3. Enviar el JSON al endpoint POST /events/ingest con el header
+ *      X-HMAC-Signature
+ *   4. Verificar la respuesta del backend
+ *
+ * Usa la función curl de Moodle (no PHP curl directo) para respetar
+ * la configuración de proxy del sitio.
+ *
+ * @package    local_meritcoin
+ * @copyright  2026 Universidad Tecnológica de Bolívar
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class api_client {
+
+    /** @var string URL base del backend. */
+    private string $baseurl;
+
+    /** @var string Secreto HMAC compartido. */
+    private string $hmacsecret;
+
+    /**
+     * Constructor.
+     *
+     * Lee la configuración del plugin automáticamente.
+     * No necesitas pasar parámetros manualmente.
+     */
+    public function __construct() {
+        $this->baseurl    = rtrim(get_config('local_meritcoin', 'api_url'), '/');
+        $this->hmacsecret = get_config('local_meritcoin', 'hmac_secret');
+    }
+
+    /**
+     * Envía un evento al backend FastAPI.
+     *
+     * @param string $jsonpayload El payload JSON del evento (ya serializado).
+     * @return object Objeto con propiedades:
+     *   - success (bool): true si el backend respondió correctamente.
+     *   - status_code (int): Código HTTP de respuesta.
+     *   - body (string): Cuerpo de la respuesta.
+     *   - error (string): Mensaje de error si hubo uno.
+     */
+    public function send_event(string $jsonpayload): object {
+        $result = new \stdClass();
+        $result->success     = false;
+        $result->status_code = 0;
+        $result->body        = '';
+        $result->error       = '';
+
+        // Validar configuración.
+        if (empty($this->baseurl)) {
+            $result->error = 'API URL is not configured in plugin settings.';
+            return $result;
+        }
+        if (empty($this->hmacsecret)) {
+            $result->error = 'HMAC secret is not configured in plugin settings.';
+            return $result;
+        }
+
+        // ── Calcular firma HMAC-SHA256 ──────────────────────────────────
+        // La firma se calcula sobre el body (JSON) completo.
+        // El backend recalcula la misma firma y compara.
+        // Si no coinciden, responde 401.
+        $signature = hash_hmac('sha256', $jsonpayload, $this->hmacsecret);
+
+        // ── Construir URL del endpoint ──────────────────────────────────
+        $url = $this->baseurl . '/events/ingest';
+
+        // ── Enviar con curl de Moodle ───────────────────────────────────
+        // Moodle tiene su propia clase curl que maneja proxy, SSL, timeouts, etc.
+        // Es preferible a usar php curl directamente.
+        $curl = new \curl();
+        $curl->setHeader([
+            'Content-Type: application/json',
+            'X-HMAC-Signature: ' . $signature,
+        ]);
+
+        // Timeout de 30 segundos (el backend debería responder mucho antes).
+        $options = [
+            'CURLOPT_TIMEOUT'        => 30,
+            'CURLOPT_CONNECTTIMEOUT' => 10,
+            'CURLOPT_RETURNTRANSFER' => true,
+        ];
+
+        $response = $curl->post($url, $jsonpayload, $options);
+
+        // ── Procesar respuesta ──────────────────────────────────────────
+        $info = $curl->get_info();
+        $result->status_code = (int)($info['http_code'] ?? 0);
+        $result->body = $response;
+
+        $curlerror = $curl->get_errno();
+        if ($curlerror) {
+            $result->error = "cURL error {$curlerror}: " . $curl->error;
+            return $result;
+        }
+
+        if ($result->status_code >= 200 && $result->status_code < 300) {
+            $result->success = true;
+        } else {
+            $result->error = "HTTP {$result->status_code}: {$response}";
+        }
+
+        return $result;
+    }
+}

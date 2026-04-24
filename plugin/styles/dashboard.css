@@ -1,0 +1,75 @@
+/* ── MeritCoin Dashboard Styles ─────────────────────────────────────────── */
+/* Compatible con Moodle 4.x (Bootstrap 4/5) */
+
+/* Hero -------------------------------------------------------------------- */
+.mrt-hero {
+    background: linear-gradient(135deg, #1a2540 0%, #0d3b5e 100%);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+}
+.mrt-hero .card-body { padding: 1.5rem 2rem; }
+.mrt-coin-icon {
+    width: 64px; height: 64px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.mrt-coin-symbol { font-size: 2rem; color: #f0c040; }
+.mrt-balance-label { font-size: 0.78rem; text-transform: uppercase;
+                     letter-spacing: .08em; opacity: .75; }
+.mrt-balance-value { font-size: 2.2rem; font-weight: 700; line-height: 1.1; }
+.mrt-balance-unknown { opacity: .5; }
+.mrt-ticker { font-size: 1rem; font-weight: 400; opacity: .8; }
+.mrt-wallet-label { font-size: 0.75rem; text-transform: uppercase;
+                    letter-spacing: .08em; opacity: .7; }
+.mrt-wallet-value { display: flex; align-items: center; justify-content: flex-end; gap: .3rem; }
+.mrt-wallet-code {
+    background: rgba(255,255,255,0.12);
+    border-radius: 6px; padding: 2px 8px;
+    font-size: 0.95rem; color: #f0c040;
+}
+.mrt-copy-btn { color: rgba(255,255,255,.7) !important; }
+.mrt-copy-btn:hover { color: #fff !important; }
+.mrt-wallet-full { word-break: break-all; }
+
+/* Stat Cards ------------------------------------------------------------- */
+.mrt-stat-card { border-radius: 10px; transition: box-shadow .2s ease; }
+.mrt-stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+.mrt-stat-icon { margin-bottom: .5rem; }
+.mrt-stat-number { font-size: 1.8rem; font-weight: 700; line-height: 1.1; }
+.mrt-stat-label { font-size: 0.78rem; color: #6c757d; text-transform: uppercase;
+                  letter-spacing: .06em; margin-top: .2rem; }
+
+/* Badges grid ------------------------------------------------------------ */
+.mrt-badges-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 1.25rem;
+    padding: .5rem;
+}
+.mrt-badge-item {
+    background: #f8f9fa; border-radius: 10px;
+    padding: 1rem .5rem; transition: transform .2s, box-shadow .2s;
+}
+.mrt-badge-item:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.1); }
+.mrt-badge-icon { margin-bottom: .5rem; }
+.mrt-badge-icon img { width: 64px; height: 64px; object-fit: contain; margin: auto; }
+.mrt-badge-name { font-size: 0.82rem; font-weight: 600; line-height: 1.2; margin-top: .3rem; }
+.mrt-badge-date { font-size: 0.72rem; margin-top: .15rem; }
+
+/* Empty states ----------------------------------------------------------- */
+.mrt-empty-state { color: #adb5bd; }
+.mrt-empty-state p { margin-bottom: .25rem; }
+
+/* Table ------------------------------------------------------------------ */
+.mrt-dashboard .table th { font-size: .78rem; text-transform: uppercase;
+                            letter-spacing: .05em; font-weight: 600; }
+.mrt-dashboard .table td { vertical-align: middle; font-size: .9rem; }
+
+/* Dark mode (respeta el tema oscuro de Moodle) --------------------------- */
+@media (prefers-color-scheme: dark) {
+    .mrt-badge-item { background: #2d3748; }
+    .mrt-stat-card  { background: #1e2a3a; border-color: #2d3748; }
+}
