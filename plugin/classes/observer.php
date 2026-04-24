@@ -81,8 +81,24 @@ class observer {
         }
 
         // Para actividades individuales, usamos iteminstance como cmid
-        $cmid          = ($gradeitem->itemtype === 'mod') ? (int)$gradeitem->iteminstance : null;
+        $cmid = null;
         $activity_name = $gradeitem->itemname ?? '';
+
+        if ($gradeitem->itemtype === 'mod') {
+            $moduleid = $DB->get_field('modules', 'id', ['name' => $gradeitem->itemmodule]);
+
+            if ($moduleid) {
+                $cm = $DB->get_record('course_modules', [
+                    'course'   => $event->courseid,
+                    'module'   => $moduleid,
+                    'instance' => $gradeitem->iteminstance,
+                ], 'id');
+
+                if ($cm) {
+                    $cmid = (int)$cm->id;
+                }
+            }
+        }   
 
         self::queue_event(
             $event->relateduserid,
@@ -141,14 +157,15 @@ class observer {
             'fieldid' => $fieldid,
         ]);
 
-        if (empty($wallet)) {
-            debugging("MeritCoin: No wallet for user {$userid}.", DEBUG_DEVELOPER);
-            return;
-        }
+        $status = 'pending';
 
-        if (!preg_match('/^0x[0-9a-fA-F]{40}$/', $wallet)) {
+        if (empty($wallet)) {
+            $wallet = null;
+            $status = 'pending_wallet';
+        } else if (!preg_match('/^0x[0-9a-fA-F]{40}$/', $wallet)) {
             debugging("MeritCoin: Invalid wallet format for user {$userid}: {$wallet}", DEBUG_DEVELOPER);
-            return;
+            $wallet = null;
+            $status = 'pending_wallet';
         }
 
         // ── 3. Calcular monedas según reglas ─────────────────────────────────
@@ -174,7 +191,7 @@ class observer {
         // ── 6. Generar event_id único ────────────────────────────────────────
         $now     = time();
         $cm_part = $cmid ?? 'course';
-        $eventid = "evt-moodle-{$userid}-{$courseid}-{$cm_part}-{$type}-{$now}";
+        $eventid = uniqid("evt-moodle-{$userid}-{$courseid}-{$cm_part}-{$type}-", true);
 
         if ($DB->record_exists('local_meritcoin_queue', ['event_id' => $eventid])) {
             return;
@@ -209,7 +226,7 @@ class observer {
         $record->coins_amount   = $coins;
         $record->student_wallet = $wallet;
         $record->payload        = json_encode($payload, JSON_UNESCAPED_UNICODE);
-        $record->status         = 'pending';
+        $record->status         = $status;
         $record->attempts       = 0;
         $record->last_error     = null;
         $record->timecreated    = $now;
