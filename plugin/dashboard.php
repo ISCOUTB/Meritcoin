@@ -68,7 +68,7 @@ echo $OUTPUT->header();
           <div class="mrt-balance-label"><?= get_string('mrtbalance', 'local_meritcoin') ?></div>
           <div class="mrt-balance-value">
             <?php if ($backend['backend_available']): ?>
-              <?= number_format($backend['mrtbalance'] ?? 0, 2) ?> <span class="mrt-ticker">MRT</span>
+              <?= number_format($backend['mrt_balance'] ?? 0, 2) ?> <span class="mrt-ticker">MRT</span>
             <?php else: ?>
               <span class="mrt-balance-unknown">--</span> <span class="mrt-ticker">MRT</span>
             <?php endif; ?>
