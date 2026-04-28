@@ -49,10 +49,31 @@ use local_meritcoin\rules_service;
 $courseid = required_param('courseid', PARAM_INT);
 $ruleid   = optional_param('id', 0, PARAM_INT);
 
-// ── Contexto y permisos ──────────────────────────────────────────────────────
+// ── Contexto y curso ─────────────────────────────────────────────────────────
 $course  = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
 $context = context_course::instance($courseid);
 
+// ── Configurar PAGE — obligatoriamente PRIMERO ────────────────────────────────
+$pageurl = new moodle_url('/local/meritcoin/editrule.php', ['courseid' => $courseid, 'id' => $ruleid]);
+$PAGE->set_url($pageurl);
+$PAGE->set_context($context);
+$PAGE->set_course($course);
+$PAGE->set_pagelayout('incourse');
+$PAGE->set_title(get_string('pluginname', 'local_meritcoin'));
+
+if ($ruleid > 0) {
+    $PAGE->set_heading(get_string('editrule', 'local_meritcoin'));
+    $PAGE->navbar->add(get_string('manage_rules', 'local_meritcoin'),
+        new moodle_url('/local/meritcoin/manage.php', ['courseid' => $courseid]));
+    $PAGE->navbar->add(get_string('editrule', 'local_meritcoin'));
+} else {
+    $PAGE->set_heading(get_string('newrule', 'local_meritcoin'));
+    $PAGE->navbar->add(get_string('manage_rules', 'local_meritcoin'),
+        new moodle_url('/local/meritcoin/manage.php', ['courseid' => $courseid]));
+    $PAGE->navbar->add(get_string('newrule', 'local_meritcoin'));
+}
+
+// ── Login y capability — después de set_course ───────────────────────────────
 require_login($course);
 require_capability('local/meritcoin:manage_rules', $context);
 
@@ -69,7 +90,7 @@ $manageurl = new moodle_url('/local/meritcoin/manage.php', ['courseid' => $cours
 $defaultcoinsymbol = rules_service::get_coin_symbol_for_course($courseid);
 
 $form = new rule_form(
-    new moodle_url('/local/meritcoin/editrule.php', ['courseid' => $courseid, 'id' => $ruleid]),
+    $pageurl,
     [
         'courseid'          => $courseid,
         'rule'              => $rule,
@@ -92,9 +113,6 @@ if ($formdata = $form->get_data()) {
     $enabled     = (int)$formdata->enabled;
     $now         = time();
 
-    // Resolver nombre de la actividad de forma fiable.
-    // Si es regla de actividad: tomamos el nombre del course module.
-    // Si es regla de curso: nombre genérico estándar.
     $activityname = '';
 
     if ($scope === 'activity' && $cmid > 0) {
@@ -108,7 +126,6 @@ if ($formdata = $form->get_data()) {
     }
 
     if ($ruleid > 0) {
-        // ── Actualizar regla existente ─────────────────────────────────
         $record               = new stdClass();
         $record->id           = $ruleid;
         $record->rule_scope   = $scope;
@@ -120,17 +137,10 @@ if ($formdata = $form->get_data()) {
         $record->timemodified = $now;
 
         $DB->update_record('local_meritcoin_rules', $record);
-
         \core\notification::success(get_string('rule_updated', 'local_meritcoin'));
 
     } else {
-        // ── Crear nueva regla ──────────────────────────────────────────
-        // Antes de insertar, verificar que no exista ya una regla igual
-        // para el mismo curso + cmid + scope, para evitar duplicados.
-        $existingparams = [
-            'courseid'   => $courseid,
-            'rule_scope' => $scope,
-        ];
+        $existingparams = ['courseid' => $courseid, 'rule_scope' => $scope];
 
         if ($scope === 'activity') {
             $existingparams['cmid'] = $cmid;
@@ -147,14 +157,12 @@ if ($formdata = $form->get_data()) {
             );
 
         if ($existing) {
-            // Regla duplicada: actualizar en lugar de insertar.
             $existing->activityname = $activityname;
             $existing->coins_amount = $coinsamount;
             $existing->coin_symbol  = $coinsymbol;
             $existing->enabled      = $enabled;
             $existing->timemodified = $now;
             $DB->update_record('local_meritcoin_rules', $existing);
-
             \core\notification::warning(get_string('rule_duplicate_updated', 'local_meritcoin'));
 
         } else {
@@ -169,27 +177,11 @@ if ($formdata = $form->get_data()) {
             $record->timecreated  = $now;
             $record->timemodified = $now;
             $DB->insert_record('local_meritcoin_rules', $record);
-
             \core\notification::success(get_string('rule_created', 'local_meritcoin'));
         }
     }
 
     redirect($manageurl);
-}
-
-// ── Configurar página ─────────────────────────────────────────────────────────
-$PAGE->set_url(new moodle_url('/local/meritcoin/editrule.php', ['courseid' => $courseid, 'id' => $ruleid]));
-$PAGE->set_context($context);
-$PAGE->set_course($course);
-$PAGE->set_pagelayout('incourse');
-$PAGE->set_title(get_string('pluginname', 'local_meritcoin'));
-
-if ($ruleid > 0) {
-    $PAGE->set_heading(get_string('editrule', 'local_meritcoin'));
-    $PAGE->navbar->add(get_string('editrule', 'local_meritcoin'));
-} else {
-    $PAGE->set_heading(get_string('newrule', 'local_meritcoin'));
-    $PAGE->navbar->add(get_string('newrule', 'local_meritcoin'));
 }
 
 // ── Renderizar ────────────────────────────────────────────────────────────────
