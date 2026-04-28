@@ -126,10 +126,10 @@ class rule_form extends \moodleform {
     public function validation($data, $files) {
         $errors = parent::validation($data, $files);
 
-        $scope = $data['rule_scope'] ?? '';
-        $cmid = isset($data['cmid']) ? (int)$data['cmid'] : 0;
-        $coinsamount = isset($data['coins_amount']) ? (float)$data['coins_amount'] : 0;
-        $coinsymbol = trim($data['coin_symbol'] ?? '');
+        $scope        = $data['rule_scope'] ?? '';
+        $cmid         = isset($data['cmid']) ? (int)$data['cmid'] : 0;
+        $coinsamount  = isset($data['coins_amount']) ? (float)$data['coins_amount'] : 0;
+        $coinsymbol   = trim($data['coin_symbol'] ?? '');
         $activityname = trim($data['activityname'] ?? '');
 
         if (!in_array($scope, ['course', 'activity'])) {
@@ -150,7 +150,7 @@ class rule_form extends \moodleform {
 
         if ($coinsymbol === '') {
             $errors['coin_symbol'] = get_string('required');
-        } else if (core_text::strlen($coinsymbol) > 20) {
+        } else if (\core_text::strlen($coinsymbol) > 20) {  // ← fix aquí
             $errors['coin_symbol'] = get_string('maxlengthwarning', '', 20);
         }
 
