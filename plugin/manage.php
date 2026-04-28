@@ -53,11 +53,19 @@ $ruleid   = optional_param('ruleid', 0, PARAM_INT);
 $course  = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
 $context = context_course::instance($courseid);
 
+// ── Configurar página ANTES de require_login ─────────────────────────────────
+$pageurl = new moodle_url('/local/meritcoin/manage.php', ['courseid' => $courseid]);
+$PAGE->set_url($pageurl);
+$PAGE->set_context($context);
+$PAGE->set_course($course);
+$PAGE->set_pagelayout('incourse');
+$PAGE->set_title(get_string('manage_rules', 'local_meritcoin'));
+$PAGE->set_heading(get_string('manage_rules', 'local_meritcoin'));
+$PAGE->navbar->add(get_string('manage_rules', 'local_meritcoin'), $pageurl);
+
+// ── Login y capability (después de set_course) ────────────────────────────────
 require_login($course);
 require_capability('local/meritcoin:manage_rules', $context);
-
-// ── URL base de esta página ───────────────────────────────────────────────────
-$pageurl = new moodle_url('/local/meritcoin/manage.php', ['courseid' => $courseid]);
 
 // ── Procesar acciones inline ──────────────────────────────────────────────────
 if (!empty($action) && $ruleid > 0) {
@@ -94,15 +102,6 @@ if (!empty($action) && $ruleid > 0) {
     redirect($pageurl);
 }
 
-// ── Configurar página ─────────────────────────────────────────────────────────
-$PAGE->set_url($pageurl);
-$PAGE->set_context($context);
-$PAGE->set_course($course);
-$PAGE->set_pagelayout('incourse');
-$PAGE->set_title(get_string('manage_rules', 'local_meritcoin'));
-$PAGE->set_heading(get_string('manage_rules', 'local_meritcoin'));
-$PAGE->navbar->add(get_string('manage_rules', 'local_meritcoin'), $pageurl);
-
 // ── Cargar reglas del curso ───────────────────────────────────────────────────
 $rules = rules_service::get_rules_for_course($courseid);
 
@@ -123,10 +122,10 @@ if (empty($rules)) {
     echo $OUTPUT->notification(get_string('norules', 'local_meritcoin'), 'info');
 
 } else {
-    $table            = new html_table();
-    $table->id        = 'meritcoin-rules-table';
+    $table             = new html_table();
+    $table->id         = 'meritcoin-rules-table';
     $table->attributes = ['class' => 'generaltable fullwidth'];
-    $table->head      = [
+    $table->head       = [
         get_string('rules_table_scope',    'local_meritcoin'),
         get_string('rules_table_activity', 'local_meritcoin'),
         get_string('rules_table_coins',    'local_meritcoin'),
@@ -138,66 +137,38 @@ if (empty($rules)) {
 
     foreach ($rules as $rule) {
 
-        // ── Columna: alcance ─────────────────────────────────────────────
         $scope = ($rule->rule_scope === 'course')
-            ? get_string('rule_scope_course',    'local_meritcoin')
-            : get_string('rule_scope_activity',  'local_meritcoin');
+            ? get_string('rule_scope_course',   'local_meritcoin')
+            : get_string('rule_scope_activity', 'local_meritcoin');
 
-        // ── Columna: actividad ───────────────────────────────────────────
         $activityname = ($rule->rule_scope === 'course')
             ? html_writer::tag('em', '—')
             : format_string($rule->activityname);
 
-        // ── Columna: monedas ─────────────────────────────────────────────
         $coins = format_float((float)$rule->coins_amount, 2);
 
-        // ── Columna: estado ──────────────────────────────────────────────
-        if ($rule->enabled) {
-            $statusbadge = html_writer::tag(
-                'span',
-                get_string('rule_enabled', 'local_meritcoin'),
-                ['class' => 'badge badge-success']
-            );
-        } else {
-            $statusbadge = html_writer::tag(
-                'span',
-                get_string('rule_disabled', 'local_meritcoin'),
-                ['class' => 'badge badge-secondary']
-            );
-        }
+        $statusbadge = $rule->enabled
+            ? html_writer::tag('span', get_string('rule_enabled',  'local_meritcoin'), ['class' => 'badge badge-success'])
+            : html_writer::tag('span', get_string('rule_disabled', 'local_meritcoin'), ['class' => 'badge badge-secondary']);
 
-        // ── Columna: acciones ────────────────────────────────────────────
         $actions = [];
 
-        // Editar.
-        $editurl = new moodle_url('/local/meritcoin/editrule.php', [
-            'courseid' => $courseid,
-            'id'       => $rule->id,
-        ]);
+        $editurl   = new moodle_url('/local/meritcoin/editrule.php', ['courseid' => $courseid, 'id' => $rule->id]);
         $actions[] = html_writer::link(
             $editurl,
             $OUTPUT->pix_icon('t/edit', get_string('editrule', 'local_meritcoin')),
             ['title' => get_string('editrule', 'local_meritcoin')]
         );
 
-        // Activar / Desactivar.
         if ($rule->enabled) {
-            $toggleurl = new moodle_url($pageurl, [
-                'action'  => 'disable',
-                'ruleid'  => $rule->id,
-                'sesskey' => sesskey(),
-            ]);
+            $toggleurl = new moodle_url($pageurl, ['action' => 'disable', 'ruleid' => $rule->id, 'sesskey' => sesskey()]);
             $actions[] = html_writer::link(
                 $toggleurl,
                 $OUTPUT->pix_icon('t/hide', get_string('rule_disable_action', 'local_meritcoin')),
                 ['title' => get_string('rule_disable_action', 'local_meritcoin')]
             );
         } else {
-            $toggleurl = new moodle_url($pageurl, [
-                'action'  => 'enable',
-                'ruleid'  => $rule->id,
-                'sesskey' => sesskey(),
-            ]);
+            $toggleurl = new moodle_url($pageurl, ['action' => 'enable', 'ruleid' => $rule->id, 'sesskey' => sesskey()]);
             $actions[] = html_writer::link(
                 $toggleurl,
                 $OUTPUT->pix_icon('t/show', get_string('rule_enable_action', 'local_meritcoin')),
@@ -205,12 +176,7 @@ if (empty($rules)) {
             );
         }
 
-        // Eliminar (con confirmación JS nativa).
-        $deleteurl = new moodle_url($pageurl, [
-            'action'  => 'delete',
-            'ruleid'  => $rule->id,
-            'sesskey' => sesskey(),
-        ]);
+        $deleteurl = new moodle_url($pageurl, ['action' => 'delete', 'ruleid' => $rule->id, 'sesskey' => sesskey()]);
         $actions[] = html_writer::link(
             $deleteurl,
             $OUTPUT->pix_icon('t/delete', get_string('rule_delete_action', 'local_meritcoin')),
