@@ -1,10 +1,11 @@
-<<<<<<< HEAD
-# MeritCoin (MRT) - Sistema de Insignias Digitales Academicas
+# MeritCoin — Sistema de Recompensas Académicas Digitales
 
-Sistema hibrido off-chain/on-chain que integra insignias digitales verificables
-(ERC-1155) y tokens de recompensa (ERC-20) con la plataforma Moodle.
+Sistema híbrido off-chain/on-chain que integra tokens de recompensa (ERC-20)
+e insignias digitales verificables (ERC-1155) con la plataforma Moodle.
 
-Desarrollado como proyecto academico en la Universidad Tecnologica de Bolivar.
+Desarrollado como proyecto académico en la **Universidad Tecnológica de Bolívar**.
+
+---
 
 ## Arquitectura
 
@@ -12,7 +13,7 @@ Desarrollado como proyecto academico en la Universidad Tecnologica de Bolivar.
 +------------------+      HMAC/POST       +------------------+
 |                  |  ----------------->  |                  |
 |   Moodle (LMS)   |                      |  FastAPI Backend  |
-|   + Plugin PHP    |  <-----------------  |   (off-chain)    |
+|  Plugin PHP v0.3 |  <-----------------  |   (off-chain)    |
 |                  |      JSON Response   |                  |
 +------------------+                      +--------+---------+
                                                    |
@@ -26,49 +27,100 @@ Desarrollado como proyecto academico en la Universidad Tecnologica de Bolivar.
                                                      +----------+----------+
                                                      v                     v
                                               +-------------+      +-------------+
-                                              | ERC-1155     |      | ERC-20      |
-                                              | MeritBadges  |      | MeritCoin   |
+                                              | ERC-1155    |      | ERC-20      |
+                                              | MeritBadges |      | MeritCoin   |
                                               +-------------+      +-------------+
 ```
 
+---
+
 ## Flujo de funcionamiento
 
-1. Un estudiante completa un curso o recibe una calificacion en Moodle
-2. El **plugin** captura el evento y lo encola en `local_meritcoin_queue`
-3. Una tarea programada envia el evento al **backend FastAPI** con firma HMAC-SHA256
-4. El backend genera metadatos **Open Badges v2 (OBv2)** y simula pin en IPFS
-5. El backend llama a los contratos: **mintBadge** (ERC-1155) y **mint** MRT (ERC-20)
-6. Todo queda registrado en **PostgreSQL** (audit_log) para trazabilidad
+1. Un estudiante completa una actividad o recibe una calificación en Moodle
+2. El **observer** del plugin captura el evento y resuelve las monedas según la regla configurada por el profesor en `local_meritcoin_rules`
+3. El evento se encola en `local_meritcoin_queue` (estado `pending` o `pending_wallet` si el estudiante aún no tiene wallet)
+4. Una **tarea programada** envía el evento al backend FastAPI firmado con HMAC-SHA256
+5. El backend genera metadatos **Open Badges v2 (OBv2)**, simula pin en IPFS y llama a los contratos: `mintBadge` (ERC-1155) y `mint` MRT (ERC-20)
+6. El resultado queda registrado en `local_meritcoin_earnings` (ganancias por curso) y en PostgreSQL (audit_log) para trazabilidad completa
+
+---
 
 ## Estructura del repositorio
 
 ```
 meritcoin/
-├── contracts/             # Solidity + Hardhat (ERC-1155 y ERC-20)
-│   ├── contracts/         # MeritBadges1155.sol, MeritCoinERC20.sol
-│   ├── test/              # 19 tests con Hardhat + Chai
-│   └── scripts/deploy.js  # Script de despliegue
-├── backend/               # FastAPI (procesamiento off-chain)
+├── contracts/                    # Solidity + Hardhat (ERC-1155 y ERC-20)
+│   ├── contracts/                # MeritBadges1155.sol, MeritCoinERC20.sol
+│   ├── test/                     # 19 tests con Hardhat + Chai
+│   └── scripts/deploy.js
+├── backend/                      # FastAPI (procesamiento off-chain)
 │   ├── app/
-│   │   ├── api/           # Endpoints: events, students
-│   │   ├── core/          # Config, DB, HMAC security
-│   │   ├── models/        # Pydantic + SQLAlchemy
-│   │   ├── services/      # Blockchain, badges, tokens, audit
-│   │   └── main.py        # App FastAPI
-│   └── tests/             # 23 tests con pytest
-├── plugin/                # Plugin Moodle local_meritcoin (PHP)
-│   ├── classes/           # Observer, API client, scheduled task
-│   ├── db/                # Tabla, eventos, tareas, permisos
-│   ├── lang/              # Strings en/es
-│   └── settings.php       # Configuracion admin
-├── scripts/               # Scripts de prueba E2E
-│   ├── test_e2e.py        # 8 pruebas automaticas
-│   ├── test_curl.py       # Generador de comandos curl
-│   └── GUIA_FASE5.md      # Guia paso a paso
-├── docker-compose.yml     # Moodle + MariaDB + PostgreSQL
-├── .env.example           # Variables de entorno
-└── README.md              # Este archivo
+│   │   ├── api/                  # Endpoints: events, students
+│   │   ├── core/                 # Config, DB, seguridad HMAC
+│   │   ├── models/               # Pydantic + SQLAlchemy
+│   │   ├── services/             # Blockchain, badges, tokens, audit
+│   │   └── main.py
+│   └── tests/                    # 23 tests con pytest
+├── plugin/                       # Plugin Moodle local_meritcoin (PHP)
+│   ├── classes/
+│   │   ├── api_client.php        # Cliente HTTP hacia FastAPI
+│   │   ├── observer.php          # Captura eventos Moodle
+│   │   ├── rules_service.php     # Lógica de reglas y saldo por curso
+│   │   ├── form/
+│   │   │   └── rule_form.php     # Formulario Moodle para crear/editar reglas
+│   │   └── task/
+│   │       └── send_events_task.php  # Tarea programada de envío
+│   ├── db/
+│   │   ├── install.xml           # Schema completo (5 tablas)
+│   │   ├── upgrade.php           # Migraciones hasta v0.3.0 (2026042801)
+│   │   ├── access.php            # Capabilities: manage, viewqueue, manage_rules, view_report
+│   │   ├── events.php            # Eventos escuchados
+│   │   └── tasks.php             # Registro de tarea programada
+│   ├── lang/
+│   │   ├── en/local_meritcoin.php
+│   │   └── es/local_meritcoin.php
+│   ├── dashboard.php             # Dashboard del estudiante
+│   ├── manage.php                # Gestión de reglas por curso (profesor)
+│   ├── editrule.php              # Crear / editar una regla
+│   ├── lib.php                   # Hooks de navegación global y de curso
+│   ├── settings.php              # Configuración de administrador
+│   └── version.php               # Versión del plugin (2026042801)
+├── scripts/
+│   ├── test_e2e.py               # 8 pruebas E2E automatizadas
+│   ├── test_curl.py              # Generador de comandos curl
+│   └── GUIA_FASE5.md
+├── docker-compose.yml            # Moodle + MariaDB + PostgreSQL
+├── .env.example
+└── README.md
 ```
+
+---
+
+## Esquema de base de datos (v0.3.0)
+
+| Tabla | Propósito |
+|-------|-----------|
+| `local_meritcoin_queue` | Cola de eventos pendientes de envío al backend |
+| `local_meritcoin_rules` | Reglas de monedas por curso/actividad (configuradas por el profesor) |
+| `local_meritcoin_earnings` | Ledger de monedas ganadas por curso (saldo disponible) |
+| `local_meritcoin_spend` | Ledger de monedas gastadas en el mercado de recompensas |
+| `local_meritcoin_course_config` | Configuración de moneda por curso (nombre, símbolo, contrato ERC-20) |
+
+El saldo gastable de un estudiante en un curso se calcula como:
+`earned (earnings) − spent (spend)`, de forma independiente por curso.
+
+---
+
+## Capabilities (permisos)
+
+| Capability | Contexto | Rol por defecto | Uso |
+|---|---|---|---|
+| `local/meritcoin:manage` | Sistema | manager | Configuración global del plugin |
+| `local/meritcoin:viewqueue` | Sistema | manager | Ver cola de eventos (panel admin) |
+| `local/meritcoin:manage_rules` | Curso | editingteacher, manager | Crear/editar/eliminar reglas del curso |
+| `local/meritcoin:view_report` | Curso | student, teacher, manager | Ver informe de ganancias del curso |
+
+---
 
 ## Requisitos
 
@@ -77,7 +129,9 @@ meritcoin/
 - **Python** 3.11+
 - **Git**
 
-## Inicio rapido
+---
+
+## Inicio rápido
 
 ### 1. Clonar y configurar
 
@@ -93,7 +147,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Primera vez tarda ~3 minutos (instalacion de Moodle). Verificar:
+Primera vez tarda ~3 minutos (instalación de Moodle).
 - Moodle: http://localhost:8080 (admin / Admin1234!)
 - PostgreSQL: puerto 5432
 
@@ -117,9 +171,8 @@ npx hardhat node
 ```bash
 cd contracts
 npx hardhat run scripts/deploy.js --network localhost
+# Copiar las direcciones de contratos mostradas
 ```
-
-Copiar las direcciones de los contratos desplegados.
 
 ### 5. Configurar y levantar backend
 
@@ -143,89 +196,127 @@ python -m uvicorn app.main:app --reload --port 8000
 
 ### 6. Configurar plugin en Moodle
 
-1. Moodle detecta el plugin automaticamente al reiniciar
-2. Ir a: Administracion del sitio > Plugins > Plugins locales > MeritCoin
-3. Habilitar y configurar:
+1. Moodle detecta el plugin automáticamente al reiniciar
+2. Ir a: **Administración del sitio → Plugins → Plugins locales → MeritCoin**
+3. Configurar:
    - URL Backend: `http://host.docker.internal:8000`
-   - Secreto HMAC: `cambia-este-secreto-en-produccion`
+   - Secreto HMAC: el mismo valor de `HMAC_SECRET`
    - Campo wallet: `wallet`
-4. Crear campo de perfil "wallet" (tipo texto, nombre corto: `wallet`)
+4. Crear campo de perfil de usuario (tipo texto, nombre corto: `wallet`)
 
-### 7. Ejecutar test E2E
+### 7. Configurar reglas por curso (nuevo en v0.3.0)
+
+1. Ir a cualquier curso → menú lateral → **Gestión de reglas MeritCoin**
+2. Crear una regla por actividad o para el curso completo
+3. El observer usará esa regla para calcular automáticamente las monedas al capturar el evento
+
+### 8. Ejecutar test E2E
 
 ```bash
 cd meritcoin
 python scripts/test_e2e.py    # 8/8 pruebas
 ```
 
+> ⚠️ **Nota sobre pruebas automáticas:** Los tests E2E y de backend fueron escritos antes de la versión 0.3.0. Es posible que algunos fallen si no se ha actualizado el entorno con las nuevas tablas (`local_meritcoin_rules`, `local_meritcoin_earnings`, `local_meritcoin_spend`). Ver sección [Estado de las pruebas](#estado-de-las-pruebas).
+
+---
+
 ## API del backend
 
-| Metodo | Endpoint | Descripcion |
+| Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| GET | `/health` | Estado del servicio y conexion blockchain |
-| POST | `/events/ingest` | Recibir evento academico (requiere HMAC) |
+| GET | `/health` | Estado del servicio y conexión blockchain |
+| POST | `/events/ingest` | Recibir evento académico (requiere HMAC) |
 | GET | `/students/{wallet}/badges` | Listar insignias de un estudiante |
-| GET | `/students/{wallet}/balance` | Consultar saldo MRT |
+| GET | `/students/{wallet}/balance` | Consultar saldo MRT global |
+| GET | `/students/{wallet}/summary` | Saldo MRT + badges (usado por el dashboard) |
+
+---
 
 ## Contratos inteligentes
 
-| Contrato | Estandar | Descripcion |
+| Contrato | Estándar | Descripción |
 |----------|----------|-------------|
-| MeritBadges1155 | ERC-1155 | Insignias digitales con metadatos OBv2 |
-| MeritCoinERC20 | ERC-20 | Token MRT de recompensa |
+| `MeritBadges1155` | ERC-1155 | Insignias digitales con metadatos OBv2 |
+| `MeritCoinERC20` | ERC-20 | Token MRT de recompensa |
 
-Ambos usan solo OpenZeppelin 5.x (sin librerias de pago).
+Ambos usan exclusivamente OpenZeppelin 5.x (sin librerías de pago).
+Incluyen `AccessControl` (ISSUER_ROLE, MINTER_ROLE) y `Pausable` para emergencias.
 
-## Recompensas MRT
+---
 
-| Evento | Tokens MRT |
-|--------|-----------|
-| Curso completado | 100 MRT |
-| Calificacion >= 3.0 | 50 MRT |
-| Calificacion < 3.0 | 0 MRT |
+## Reglas de recompensa
+
+Las monedas se calculan en el plugin (no en el backend) a partir de las reglas
+configuradas por el profesor en cada curso.
+
+| Tipo de regla | Configuración | Comportamiento |
+|---|---|---|
+| **Por actividad** | `rule_scope = activity`, `cmid` específico | Se aplica solo al completar esa actividad |
+| **Por curso** | `rule_scope = course`, `cmid = NULL` | Se aplica al completar el curso entero |
+
+El valor de monedas es un monto fijo (`coins_amount`) definido por el profesor.
+Las reglas se pueden habilitar o deshabilitar sin borrarlas.
+
+---
 
 ## Seguridad
 
-- **HMAC-SHA256**: Toda comunicacion Moodle -> FastAPI esta firmada
-- **Sin datos personales**: La blockchain solo almacena wallets y IDs ofuscados
-- **Idempotencia**: Eventos duplicados son rechazados por event_id unico
-- **Roles**: Contratos con ISSUER_ROLE y MINTER_ROLE (AccessControl)
-- **Pausable**: Ambos contratos pueden pausarse en emergencia
+- **HMAC-SHA256**: toda comunicación Moodle → FastAPI está firmada
+- **Sin datos personales en blockchain**: solo wallets e IDs ofuscados
+- **Idempotencia**: eventos duplicados son rechazados por `event_id` único (índice en BD)
+- **Roles Moodle**: capabilities por contexto de curso, no globales
+- **Contratos**: `ISSUER_ROLE`, `MINTER_ROLE` y `Pausable`
+- **sesskey**: todas las acciones de escritura en el plugin usan `require_sesskey()`
 
-## Stack tecnologico
+---
 
-| Componente | Tecnologia |
+## Stack tecnológico
+
+| Componente | Tecnología |
 |------------|-----------|
 | LMS | Moodle 4.3 (Docker) |
 | Contratos | Solidity 0.8.28, OpenZeppelin 5.x, Hardhat 2.28 |
 | Backend | FastAPI, SQLAlchemy async, web3.py, PostgreSQL 16 |
-| Plugin | PHP (Moodle plugin API) |
+| Plugin | PHP 8.x (Moodle Plugin API) |
 | Base de datos | MariaDB (Moodle) + PostgreSQL (Backend) |
 | Blockchain | Hardhat local node (desarrollo) |
 
-## Tests
+---
 
-| Componente | Tests | Framework |
-|------------|-------|-----------|
-| Contratos | 19 | Hardhat + Chai |
-| Backend | 23 | pytest + httpx |
-| E2E | 8 | Python (stdlib) |
-| **Total** | **50** | |
+## Estado de las pruebas
+
+| Componente | Tests | Framework | Estado |
+|------------|-------|-----------|--------|
+| Contratos Solidity | 19 | Hardhat + Chai | ✅ Estables |
+| Backend FastAPI | 23 | pytest + httpx | ⚠️ Verificar con schema v0.3.0 |
+| E2E flujo completo | 8 | Python (stdlib) | ⚠️ Verificar con reglas nuevas |
+| **Total** | **50** | | |
+
+> Los tests de backend y E2E fueron escritos para v0.2.x. Tras los cambios de v0.3.0
+> (nuevas tablas `rules`, `earnings`, `spend` y lógica de `rules_service`) es necesario
+> revisar si los fixtures y mocks cubren el nuevo flujo de cálculo de monedas.
+> Los contratos no cambiaron, por lo que sus 19 tests siguen siendo válidos.
+
+---
 
 ## Estado del proyecto
 
-| Fase | Descripcion | Estado |
+| Fase | Descripción | Estado |
 |------|-------------|--------|
-| 1 | Entorno de desarrollo (Docker) | Completa |
-| 2 | Contratos inteligentes (Solidity) | Completa |
-| 3 | Backend FastAPI (Python) | Completa |
-| 4 | Plugin de Moodle (PHP) | Completa |
-| 5 | Prueba de flujo completo (E2E) | Completa |
-| 6 | Documentacion final | Completa |
+| 1 | Entorno de desarrollo (Docker) | ✅ Completa |
+| 2 | Contratos inteligentes (Solidity) | ✅ Completa |
+| 3 | Backend FastAPI (Python) | ✅ Completa |
+| 4 | Plugin de Moodle — core (observer, task, queue) | ✅ Completa |
+| 5 | Prueba de flujo completo (E2E) | ✅ Completa |
+| 6 | Gestión de reglas por curso (manage.php, editrule.php, rules_service) | ✅ Completa |
+| 7 | Ledger de ganancias y gasto por curso (earnings, spend) | ✅ Completa |
+| 8 | Dashboard del estudiante por curso | 🔄 En progreso |
+| 9 | Mercado de recompensas (canje de monedas) | 📋 Pendiente |
+| 10 | Despliegue en SAVIO + ajuste visual al tema de la universidad | 📋 Pendiente |
+
+---
 
 ## Licencia
 
-Proyecto academico - Universidad Tecnologica de Bolivar, 2026.
-=======
-# Meritcoin
->>>>>>> 84214f7b62dd8b58eaf58c9138017ad5e363f29c
+Proyecto académico — Universidad Tecnológica de Bolívar, 2026.
