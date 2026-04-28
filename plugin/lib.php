@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - [http://moodle.org/](http://moodle.org/)
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -27,37 +27,46 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir . '/filelib.php');
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NAVEGACIÓN
+// NAVEGACIÓN — Moodle 4.x
+//
+//  • local_meritcoin_extend_navigation_primary()  → agrega "MeritCoin" en la
+//    barra superior (Primary navigation). Correcto en Moodle 4.x.
+//
+//  • local_meritcoin_extend_settings_navigation() → agrega "Gestión de reglas"
+//    en el menú del curso (More / courseadmin). Correcto en Moodle 4.x.
+//
+//  • local_meritcoin_extend_navigation_user_settings() → enlace en perfil.
+//    Este hook sigue funcionando igual en 4.x.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Agrega el enlace al dashboard de MeritCoin en la navegación global.
- * Solo visible para usuarios autenticados (no invitados).
+ * Agrega "MeritCoin" en la barra de navegación primaria (Moodle 4.x).
+ * Reemplaza a extend_navigation() que ya no es confiable en Moodle 4.x.
  *
- * @param global_navigation $nav
+ * @param \core\navigation\primary $primarynav
  */
-function local_meritcoin_extend_navigation(global_navigation $nav) {
+function local_meritcoin_extend_navigation_primary(\core\navigation\primary $primarynav) {
     if (!isloggedin() || isguestuser()) {
         return;
     }
 
-    $node = $nav->add(
+    $node = \navigation_node::create(
         get_string('pluginname', 'local_meritcoin'),
         new moodle_url('/local/meritcoin/dashboard.php'),
-        navigation_node::TYPE_CUSTOM,
+        \navigation_node::TYPE_CUSTOM,
         null,
-        'local_meritcoin_dashboard',
+        'local_meritcoin_primary',
         new pix_icon('i/badge', get_string('pluginname', 'local_meritcoin'))
     );
 
-    $node->showinflatnavigation = true;
+    $primarynav->add_node($node);
 }
 
 /**
  * Agrega el enlace a MeritCoin en la configuración del perfil del usuario.
  *
  * @param navigation_node $nav
- * @param context $context
+ * @param context         $context
  */
 function local_meritcoin_extend_navigation_user_settings($nav, $context) {
     global $USER;
@@ -84,23 +93,22 @@ function local_meritcoin_extend_navigation_user_settings($nav, $context) {
 }
 
 /**
- * Agrega el enlace de gestión de reglas en la navegación del curso.
+ * Agrega "Gestión de reglas MeritCoin" al menú de administración del curso.
+ * Aparece en: curso → More → MeritCoin – Reglas de monedas.
  *
- * Solo se muestra si el usuario tiene la capability manage_rules sobre
- * el contexto del curso. Así el enlace aparece únicamente para
- * profesores/editores y managers, no para estudiantes.
+ * Reemplaza a extend_course_navigation() que en Moodle 4.x solo agrega al
+ * árbol interno pero no aparece visualmente en la UI del curso.
  *
- * Aparece en: Menú del curso → sección de administración del curso.
- *
- * @param navigation_node $parentnode
- * @param stdClass        $course
- * @param context_course  $context
+ * @param settings_navigation $settingsnav
+ * @param context             $context
  */
-function local_meritcoin_extend_course_navigation(
-    navigation_node $parentnode,
-    stdClass $course,
-    context_course $context
-) {
+function local_meritcoin_extend_settings_navigation(settings_navigation $settingsnav, context $context) {
+
+    // Solo actuar dentro de un curso.
+    if (!($context instanceof context_course)) {
+        return;
+    }
+
     if (!isloggedin() || isguestuser()) {
         return;
     }
@@ -109,9 +117,15 @@ function local_meritcoin_extend_course_navigation(
         return;
     }
 
-    $parentnode->add(
+    // courseadmin es el nodo raíz de "Administración del curso" en Moodle 4.x.
+    $courseadmin = $settingsnav->find('courseadmin', navigation_node::TYPE_COURSE);
+    if (!$courseadmin) {
+        return;
+    }
+
+    $courseadmin->add(
         get_string('manage_rules', 'local_meritcoin'),
-        new moodle_url('/local/meritcoin/manage.php', ['courseid' => $course->id]),
+        new moodle_url('/local/meritcoin/manage.php', ['courseid' => $context->instanceid]),
         navigation_node::TYPE_SETTING,
         null,
         'local_meritcoin_manage_rules',
@@ -153,9 +167,6 @@ function local_meritcoin_get_user_wallet(int $userid): ?string {
 
 /**
  * Calcula estadísticas básicas del usuario a partir de la cola local.
- *
- * Nota: este método lee TODOS los eventos del usuario de la cola.
- * Para cálculos más específicos por curso usa rules_service.
  *
  * @param int $userid
  * @return array
@@ -216,9 +227,6 @@ function local_meritcoin_get_user_stats(int $userid): array {
 
 /**
  * Consulta el backend FastAPI para obtener el saldo MRT y los badges del estudiante.
- *
- * Devuelve datos seguros aunque el backend no esté disponible; el dashboard
- * mostrará datos locales en ese caso.
  *
  * @param int         $userid
  * @param string|null $wallet
