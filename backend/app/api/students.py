@@ -121,7 +121,7 @@ async def get_student_summary(
     # 1. Balance desde blockchain
     try:
         balance_mrt, _ = blockchain.get_mrt_balance(wallet)
-        balance_float = float(balance_mrt)
+        balance_float = float(str(balance_mrt))  
     except Exception as e:
         logger.error(f"[summary] Error balance {wallet}: {e}")
         balance_float = 0.0
