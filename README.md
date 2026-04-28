@@ -164,7 +164,7 @@ npx hardhat test          # 19/19 tests
 **Terminal 1:**
 ```bash
 cd contracts
-npx hardhat node
+npx hardhat node --hostname 0.0.0.0
 ```
 
 **Terminal 2:**
@@ -174,27 +174,36 @@ npx hardhat run scripts/deploy.js --network localhost
 # Copiar las direcciones de contratos mostradas
 ```
 
-### 5. Configurar y levantar backend
+### 5. Configurar variables de entorno
 
-Crear `backend/.env`:
+Editar el `.env` en la raíz del proyecto:
 ```env
 DATABASE_URL=postgresql+asyncpg://meritcoin:meritcoin_pass@localhost:5432/meritcoin_db
 HMAC_SECRET=cambia-este-secreto-en-produccion
-BLOCKCHAIN_RPC_URL=http://127.0.0.1:8545
+BLOCKCHAIN_RPC_URL=http://host.docker.internal:8545
 DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 BADGE_CONTRACT_ADDRESS=<direccion del paso 4>
 MRT_CONTRACT_ADDRESS=<direccion del paso 4>
 DEBUG=true
 ```
 
+> ⚠️ El backend corre dentro de Docker. Usar `host.docker.internal` (no `127.0.0.1`) para apuntar a servicios en tu máquina local como el nodo Hardhat.
+
+### 6. Levantar el backend
+
 ```bash
-cd backend
-pip install -r requirements.txt
-python -m pytest tests/ -v    # 23/23 tests
-python -m uvicorn app.main:app --reload --port 8000
+docker compose up -d
+# O si ya está corriendo, reiniciar para tomar el .env actualizado:
+docker compose restart backend
 ```
 
-### 6. Configurar plugin en Moodle
+Verificar que el backend esté sano:
+```bash
+curl http://localhost:8000/health
+# Debe mostrar: "blockchain_connected": true
+```
+
+### 7. Configurar plugin en Moodle
 
 1. Moodle detecta el plugin automáticamente al reiniciar
 2. Ir a: **Administración del sitio → Plugins → Plugins locales → MeritCoin**
@@ -204,20 +213,18 @@ python -m uvicorn app.main:app --reload --port 8000
    - Campo wallet: `wallet`
 4. Crear campo de perfil de usuario (tipo texto, nombre corto: `wallet`)
 
-### 7. Configurar reglas por curso (nuevo en v0.3.0)
+### 8. Configurar reglas por curso
 
 1. Ir a cualquier curso → menú lateral → **Gestión de reglas MeritCoin**
 2. Crear una regla por actividad o para el curso completo
 3. El observer usará esa regla para calcular automáticamente las monedas al capturar el evento
 
-### 8. Ejecutar test E2E
+### 9. Ejecutar tests E2E
 
 ```bash
-cd meritcoin
-python scripts/test_e2e.py    # 8/8 pruebas
+python scripts/test_e2e.py
+# Resultado esperado: 8/8 pruebas pasaron
 ```
-
-> ⚠️ **Nota sobre pruebas automáticas:** Los tests E2E y de backend fueron escritos antes de la versión 0.3.0. Es posible que algunos fallen si no se ha actualizado el entorno con las nuevas tablas (`local_meritcoin_rules`, `local_meritcoin_earnings`, `local_meritcoin_spend`). Ver sección [Estado de las pruebas](#estado-de-las-pruebas).
 
 ---
 
@@ -289,14 +296,9 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 | Componente | Tests | Framework | Estado |
 |------------|-------|-----------|--------|
 | Contratos Solidity | 19 | Hardhat + Chai | ✅ Estables |
-| Backend FastAPI | 23 | pytest + httpx | ⚠️ Verificar con schema v0.3.0 |
-| E2E flujo completo | 8 | Python (stdlib) | ⚠️ Verificar con reglas nuevas |
+| Backend FastAPI | 23 | pytest + httpx | ✅ Estables |
+| E2E flujo completo | 8 | Python (stdlib) | ✅ Estables |
 | **Total** | **50** | | |
-
-> Los tests de backend y E2E fueron escritos para v0.2.x. Tras los cambios de v0.3.0
-> (nuevas tablas `rules`, `earnings`, `spend` y lógica de `rules_service`) es necesario
-> revisar si los fixtures y mocks cubren el nuevo flujo de cálculo de monedas.
-> Los contratos no cambiaron, por lo que sus 19 tests siguen siendo válidos.
 
 ---
 
