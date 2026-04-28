@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - [http://moodle.org/](http://moodle.org/)
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_meritcoin';
-$plugin->version   = 2026042401;     // YYYYMMDDXX 
+$plugin->version   = 2026042801;     // YYYYMMDDXX
 $plugin->requires  = 2023100900;     // Moodle 4.3+
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.2.1';
+$plugin->release   = '0.3.0';

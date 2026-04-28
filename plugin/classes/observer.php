@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - [http://moodle.org/](http://moodle.org/)
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -13,30 +13,36 @@ defined('MOODLE_INTERNAL') || die();
 /**
  * Event observer for local_meritcoin.
  *
- * CÓMO FUNCIONA (v0.2.0):
+ * CÓMO FUNCIONA (v0.3.0):
  * ─────────────────────────────────────────────────────────────────────────────
  * Escucha dos eventos de Moodle:
  *
- *   1. course_completed → emite monedas por completar el curso completo.
- *   2. user_graded      → emite monedas por cada ACTIVIDAD INDIVIDUAL calificada
- *                         (tareas, quizzes, etc.) Y por la calificación final.
+ *   1. course_completed → registra el logro del curso completo.
+ *      Por defecto NO suma monedas gastables para el mercado del curso.
+ *
+ *   2. user_graded      → registra monedas por cada ACTIVIDAD INDIVIDUAL
+ *                         calificada (tareas, quizzes, etc.) y también puede
+ *                         procesar la calificación final del curso.
  *
  * Para calcular cuántas monedas dar, consulta la tabla local_meritcoin_rules:
  *   - Si hay regla para ese curso+actividad → usa esa regla.
  *   - Si hay regla para ese curso (sin actividad) → usa la regla del curso.
- *   - Si no hay ninguna regla → fórmula por defecto (nota / 10).
+ *   - Si no hay ninguna regla → devuelve 0 para no emitir monedas “por defecto”.
  *
- * El símbolo de la moneda se lee de local_meritcoin_course_config.
- * Si el curso no tiene configuración propia → usa 'MRT'.
+ * El símbolo y nombre de la moneda se leen de local_meritcoin_course_config.
+ * Si el curso no tiene configuración propia → usa 'MRT' / 'MeritCoin'.
  *
  * @package    local_meritcoin
  * @copyright  2026 Universidad Tecnológica de Bolívar
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @license    [http://www.gnu.org/copyleft/gpl.html](http://www.gnu.org/copyleft/gpl.html) GNU GPL v3 or later
  */
 class observer {
 
     /**
      * Maneja el evento de curso completado.
+     *
+     * Se sigue encolando porque puede ser útil para auditoría, badges o backend,
+     * pero por defecto no genera saldo gastable del mercado.
      *
      * @param \core\event\course_completed $event
      */
@@ -46,15 +52,15 @@ class observer {
             $event->courseid,
             'completion',
             null,
-            null,   // cmid: null porque es el curso completo
-            ''      // activity_name: vacío, se usará el nombre del curso
+            null,   // cmid: null porque es el curso completo.
+            ''      // activity_name: vacío, se usará el nombre del curso.
         );
     }
 
     /**
      * Maneja el evento de calificación registrada.
      *
-     * Procesa TANTO actividades individuales (itemtype='mod') COMO la
+     * Procesa tanto actividades individuales (itemtype='mod') como la
      * calificación final del curso (itemtype='course').
      *
      * @param \core\event\user_graded $event
@@ -62,7 +68,7 @@ class observer {
     public static function user_graded(\core\event\user_graded $event) {
         global $DB;
 
-        $gradeitem = $DB->get_record('grade_items', ['id' => $event->other['itemid']]);
+        $gradeitem = $DB->get_record('grade_items', ['id' => $event->other['itemid'] ?? 0]);
         if (!$gradeitem) {
             return;
         }
@@ -75,22 +81,22 @@ class observer {
 
         $grade = isset($event->other['finalgrade']) ? (float)$event->other['finalgrade'] : null;
 
-        // No encolar si no tiene calificación aún
+        // No encolar si todavía no existe una calificación válida.
         if ($grade === null || $grade < 0) {
             return;
         }
 
-        // Para actividades individuales, usamos iteminstance como cmid
         $cmid = null;
-        $activity_name = $gradeitem->itemname ?? '';
+        $activityname = $gradeitem->itemname ?? '';
 
-        if ($gradeitem->itemtype === 'mod') {
+        // Para actividades reales, resolver el course module para guardar cmid.
+        if ($gradeitem->itemtype === 'mod' && !empty($gradeitem->itemmodule) && !empty($gradeitem->iteminstance)) {
             $moduleid = $DB->get_field('modules', 'id', ['name' => $gradeitem->itemmodule]);
 
             if ($moduleid) {
                 $cm = $DB->get_record('course_modules', [
-                    'course'   => $event->courseid,
-                    'module'   => $moduleid,
+                    'course' => $event->courseid,
+                    'module' => $moduleid,
                     'instance' => $gradeitem->iteminstance,
                 ], 'id');
 
@@ -98,7 +104,7 @@ class observer {
                     $cmid = (int)$cm->id;
                 }
             }
-        }   
+        }
 
         self::queue_event(
             $event->relateduserid,
@@ -106,7 +112,7 @@ class observer {
             'grade',
             $grade,
             $cmid,
-            $activity_name
+            $activityname
         );
     }
 
@@ -114,19 +120,19 @@ class observer {
      * Encola un evento académico para envío posterior al backend.
      *
      * Pasos:
-     *   1. Verificar plugin habilitado
-     *   2. Obtener wallet del estudiante
-     *   3. Calcular monedas según reglas
-     *   4. Obtener configuración de moneda del curso
-     *   5. Generar event_id único
-     *   6. Insertar en la cola
+     *   1. Verificar plugin habilitado.
+     *   2. Obtener wallet del estudiante.
+     *   3. Calcular monedas según reglas simples por curso/actividad.
+     *   4. Obtener configuración de moneda del curso.
+     *   5. Generar event_id único.
+     *   6. Insertar en la cola.
      *
-     * @param int        $userid        ID del usuario en Moodle.
-     * @param int        $courseid      ID del curso en Moodle.
-     * @param string     $type          Tipo de evento: 'completion' o 'grade'.
-     * @param float|null $grade         Calificación (solo para type=grade).
-     * @param int|null   $cmid          ID del course module (null = curso completo).
-     * @param string     $activity_name Nombre de la actividad.
+     * @param int        $userid       ID del usuario en Moodle.
+     * @param int        $courseid     ID del curso en Moodle.
+     * @param string     $type         Tipo de evento: 'completion' o 'grade'.
+     * @param float|null $grade        Calificación (solo para type=grade).
+     * @param int|null   $cmid         ID del course module (null = curso completo).
+     * @param string     $activityname Nombre de la actividad.
      */
     private static function queue_event(
         int $userid,
@@ -134,7 +140,7 @@ class observer {
         string $type,
         ?float $grade,
         ?int $cmid,
-        string $activity_name
+        string $activityname
     ) {
         global $DB;
 
@@ -153,7 +159,7 @@ class observer {
         }
 
         $wallet = $DB->get_field('user_info_data', 'data', [
-            'userid'  => $userid,
+            'userid' => $userid,
             'fieldid' => $fieldid,
         ]);
 
@@ -169,29 +175,34 @@ class observer {
         }
 
         // ── 3. Calcular monedas según reglas ─────────────────────────────────
-        $coins = self::calculate_coins($courseid, $cmid, $type, $grade);
+        // En v0.3.0 la fuente principal es la regla simple definida por el profesor.
+        // Completion se registra, pero por defecto no suma monedas gastables.
+        $coins = rules_service::get_coins_for_event($courseid, $cmid, $type);
 
-        // No encolar si la nota no alcanzó el mínimo (coins = 0 y hay nota)
+        // Para grades sin regla activa o con valor 0, no encolar monedas “vacías”.
+        // Así evitamos crear eventos inútiles para el mercado del curso.
         if ($type === 'grade' && $coins <= 0) {
-            debugging("MeritCoin: Grade {$grade} did not meet minimum for coins.", DEBUG_DEVELOPER);
+            debugging(
+                "MeritCoin: No active coin rule for course {$courseid}, cmid " . ($cmid ?? 'null') . ".",
+                DEBUG_DEVELOPER
+            );
             return;
         }
 
         // ── 4. Configuración de moneda del curso ─────────────────────────────
-        $course_config = $DB->get_record('local_meritcoin_course_config', ['courseid' => $courseid]);
-        $coin_symbol   = $course_config ? $course_config->coin_symbol : 'MRT';
-        $coin_name     = $course_config ? $course_config->coin_name   : 'MeritCoin';
+        $coinsymbol = rules_service::get_coin_symbol_for_course($courseid);
+        $coinname = rules_service::get_coin_name_for_course($courseid);
 
         // ── 5. Datos del curso y nombre de actividad ─────────────────────────
         $coursename = $DB->get_field('course', 'fullname', ['id' => $courseid]) ?? "Course #{$courseid}";
-        if (empty($activity_name)) {
-            $activity_name = $coursename;
+        if (empty($activityname)) {
+            $activityname = $coursename;
         }
 
         // ── 6. Generar event_id único ────────────────────────────────────────
-        $now     = time();
-        $cm_part = $cmid ?? 'course';
-        $eventid = uniqid("evt-moodle-{$userid}-{$courseid}-{$cm_part}-{$type}-", true);
+        $now = time();
+        $cmpart = $cmid ?? 'course';
+        $eventid = uniqid("evt-moodle-{$userid}-{$courseid}-{$cmpart}-{$type}-", true);
 
         if ($DB->record_exists('local_meritcoin_queue', ['event_id' => $eventid])) {
             return;
@@ -199,106 +210,39 @@ class observer {
 
         // ── 7. Construir payload JSON ────────────────────────────────────────
         $payload = [
-            'event_id'       => $eventid,
+            'event_id' => $eventid,
             'student_wallet' => $wallet,
-            'student_id'     => "STU-{$userid}",
-            'course_id'      => "COURSE-{$courseid}",
-            'course_name'    => $coursename,
-            'activity_id'    => $cmid ? "CM-{$cmid}" : null,
-            'activity_name'  => $activity_name,
-            'event_type'     => $type,
-            'grade'          => $grade,
-            'coins_amount'   => $coins,
-            'coin_symbol'    => $coin_symbol,
-            'coin_name'      => $coin_name,
-            'timestamp'      => gmdate('Y-m-d\TH:i:s\Z', $now),
+            'student_id' => "STU-{$userid}",
+            'course_id' => "COURSE-{$courseid}",
+            'course_name' => $coursename,
+            'activity_id' => $cmid ? "CM-{$cmid}" : null,
+            'activity_name' => $activityname,
+            'event_type' => $type,
+            'grade' => $grade,
+            'coins_amount' => $coins,
+            'coin_symbol' => $coinsymbol,
+            'coin_name' => $coinname,
+            'timestamp' => gmdate('Y-m-d\TH:i:s\Z', $now),
         ];
 
         // ── 8. Insertar en la cola ───────────────────────────────────────────
-        $record                 = new \stdClass();
-        $record->event_id       = $eventid;
-        $record->userid         = $userid;
-        $record->courseid       = $courseid;
-        $record->cmid           = $cmid;
-        $record->activity_name  = $activity_name;
-        $record->event_type     = $type;
-        $record->grade          = $grade;
-        $record->coins_amount   = $coins;
+        $record = new \stdClass();
+        $record->event_id = $eventid;
+        $record->userid = $userid;
+        $record->courseid = $courseid;
+        $record->cmid = $cmid;
+        $record->activity_name = $activityname;
+        $record->event_type = $type;
+        $record->grade = $grade;
+        $record->coins_amount = $coins;
         $record->student_wallet = $wallet;
-        $record->payload        = json_encode($payload, JSON_UNESCAPED_UNICODE);
-        $record->status         = $status;
-        $record->attempts       = 0;
-        $record->last_error     = null;
-        $record->timecreated    = $now;
-        $record->timemodified   = $now;
+        $record->payload = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        $record->status = $status;
+        $record->attempts = 0;
+        $record->last_error = null;
+        $record->timecreated = $now;
+        $record->timemodified = $now;
 
         $DB->insert_record('local_meritcoin_queue', $record);
-    }
-
-    /**
-     * Calcula cuántas monedas otorgar según las reglas configuradas.
-     *
-     * Prioridad de búsqueda:
-     *   1. Regla específica para este curso + actividad (cmid)
-     *   2. Regla general del curso (cmid = NULL)
-     *   3. Fórmula por defecto
-     *
-     * Fórmulas:
-     *   - coins_fixed → valor fijo independiente de la nota
-     *   - coins_pct   → grade * coins_pct (ej: 85 * 0.5 = 42.5 monedas)
-     *   - defecto grade → grade / 10
-     *   - defecto completion → 50 monedas
-     *
-     * @param int        $courseid ID del curso.
-     * @param int|null   $cmid     ID del course module (null = curso completo).
-     * @param string     $type     'completion' o 'grade'.
-     * @param float|null $grade    Calificación.
-     * @return float Monedas a otorgar (0 si no cumple mínimo).
-     */
-    private static function calculate_coins(int $courseid, ?int $cmid, string $type, ?float $grade): float {
-        global $DB;
-
-        $rule = null;
-
-        // Buscar regla específica para esta actividad
-        if ($cmid !== null) {
-            $rule = $DB->get_record('local_meritcoin_rules', [
-                'courseid' => $courseid,
-                'cmid'     => $cmid,
-            ]);
-        }
-
-        // Si no hay regla de actividad, buscar regla de curso
-        if (!$rule) {
-            $rule = $DB->get_record_sql(
-                "SELECT * FROM {local_meritcoin_rules}
-                  WHERE courseid = :courseid AND cmid IS NULL",
-                ['courseid' => $courseid]
-            );
-        }
-
-        // Si hay regla: aplicarla
-        if ($rule) {
-            // Verificar nota mínima
-            if ($type === 'grade' && $grade !== null && $grade < (float)$rule->min_grade) {
-                return 0.0;
-            }
-
-            if (!empty($rule->coins_fixed)) {
-                return (float)$rule->coins_fixed;
-            }
-
-            if (!empty($rule->coins_pct) && $grade !== null) {
-                return round($grade * (float)$rule->coins_pct, 2);
-            }
-        }
-
-        // Sin regla: fórmula por defecto
-        if ($type === 'completion') {
-            return 50.0;  // 50 monedas por completar el curso
-        }
-
-        // Para grade: 1 moneda cada 10 puntos (mínimo 0)
-        return $grade !== null ? round($grade / 10, 2) : 0.0;
     }
 }
