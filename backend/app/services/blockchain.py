@@ -145,23 +145,24 @@ class BlockchainService:
         logger.info(f"Badge #{badge_id} emitido a {to} — tx: {tx_hash}")
         return tx_hash
 
-    def mint_mrt(self, to: str, amount_ether: int) -> str:
-        """
-        Acuña tokens MRT.
-        amount_ether: cantidad en unidades enteras (se convierte a wei).
-        Retorna el tx_hash como string hex.
-        """
-        if not self.mrt_contract:
-            raise RuntimeError("Contrato MRT no configurado (MRT_CONTRACT_ADDRESS vacío)")
+    def mint_mrt(self, to: str, amount_ether: float) -> str:
+      """
+      Acuña tokens MRT.
+      amount_ether: cantidad en unidades enteras (se convierte a wei).
+      Retorna el tx_hash como string hex.
+      """
+      if not self.mrt_contract:
+          raise RuntimeError("Contrato MRT no configurado (MRT_CONTRACT_ADDRESS vacío)")
 
-        to_addr = Web3.to_checksum_address(to)
-        amount_wei = Web3.to_wei(amount_ether, "ether")
-        receipt = self._send_tx(
-            self.mrt_contract.functions.mint(to_addr, amount_wei)
-        )
-        tx_hash = receipt.transactionHash.hex()
-        logger.info(f"{amount_ether} MRT acuñados a {to} — tx: {tx_hash}")
-        return tx_hash
+      to_addr = Web3.to_checksum_address(to)
+      # web3.py requiere string o int para to_wei, no float
+      amount_wei = Web3.to_wei(str(amount_ether), "ether")
+      receipt = self._send_tx(
+          self.mrt_contract.functions.mint(to_addr, amount_wei)
+      )
+      tx_hash = receipt.transactionHash.hex()
+      logger.info(f"{amount_ether} MRT acuñados a {to} — tx: {tx_hash}")
+      return tx_hash
 
     def get_badge_balance(self, wallet: str, badge_id: int) -> int:
         """Consulta cuántas unidades de un badge tiene un wallet."""
