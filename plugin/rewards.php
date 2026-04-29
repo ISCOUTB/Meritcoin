@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
         $name        = required_param('name', PARAM_TEXT);
         $description = optional_param('description', '', PARAM_TEXT);
-        $price_mrt   = required_param('price_mrt', PARAM_FLOAT);
+        $price_mrt   = required_param('price_mrt', PARAM_INT);
 
         if (empty(trim($name)) || $price_mrt <= 0) {
             redirect(new moodle_url('/local/meritcoin/rewards.php', ['courseid' => $courseid]),
@@ -125,7 +125,7 @@ echo $OUTPUT->header();
     <div class="card-body">
       <form method="post"
             action="<?= new moodle_url('/local/meritcoin/rewards.php', ['courseid' => $courseid]) ?>">
-        <?= sesskey_form_element() ?>
+        <input type="hidden" name="sesskey" value="<?= sesskey() ?>">
         <input type="hidden" name="action" value="create">
 
         <div class="row g-3">
@@ -138,14 +138,14 @@ echo $OUTPUT->header();
                    maxlength="255" required>
           </div>
           <div class="col-md-2">
-            <label class="form-label fw-semibold" for="mrt-price">
-              <?= get_string('rewardprice', 'local_meritcoin') ?> <span class="text-danger">*</span>
-            </label>
-            <div class="input-group">
+              <label class="form-label fw-semibold" for="mrt-price">
+                  <?= get_string('rewardprice', 'local_meritcoin') ?> <span class="text-danger">*</span>
+              </label>
               <input type="number" id="mrt-price" name="price_mrt" class="form-control"
-                     min="0.01" step="0.01" placeholder="50" required>
-              <span class="input-group-text"><?= s($coin_symbol) ?></span>
-            </div>
+                     min="1" step="1" placeholder="50"
+                     style="width:70px; font-size:0.95rem; font-weight:500;"
+                     oninput="this.value = Math.abs(Math.round(this.value)) || ''"
+                     required>
           </div>
           <div class="col-md-5">
             <label class="form-label fw-semibold" for="mrt-desc">
@@ -215,7 +215,7 @@ echo $OUTPUT->header();
                     <!-- Toggle activo/inactivo -->
                     <form method="post" class="d-inline"
                           action="<?= new moodle_url('/local/meritcoin/rewards.php', ['courseid' => $courseid]) ?>">
-                      <?= sesskey_form_element() ?>
+                      <input type="hidden" name="sesskey" value="<?= sesskey() ?>">
                       <input type="hidden" name="action" value="toggle">
                       <input type="hidden" name="rid" value="<?= $r->id ?>">
                       <button type="submit" class="btn btn-sm <?= $r->active ? 'btn-outline-warning' : 'btn-outline-success' ?>"
@@ -228,7 +228,7 @@ echo $OUTPUT->header();
                       <form method="post" class="d-inline"
                             action="<?= new moodle_url('/local/meritcoin/rewards.php', ['courseid' => $courseid]) ?>"
                             onsubmit="return confirm('<?= get_string('rewardconfirmdelete', 'local_meritcoin') ?>')">
-                        <?= sesskey_form_element() ?>
+                        <input type="hidden" name="sesskey" value="<?= sesskey() ?>">
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="rid" value="<?= $r->id ?>">
                         <button type="submit" class="btn btn-sm btn-outline-danger"
