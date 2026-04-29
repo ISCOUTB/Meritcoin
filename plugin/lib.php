@@ -304,3 +304,38 @@ function local_meritcoin_status_badge(string $status): string {
 
     return get_string($key, 'local_meritcoin');
 }
+
+/**
+ * Extiende el menú de navegación dentro de un curso.
+ * - Estudiantes ven: "Mercado de Recompensas"
+ * - Profesores/managers ven: "Mercado de Recompensas" + "Gestionar Recompensas"
+ */
+function local_meritcoin_extend_navigation_course($nav, $course, $context) {
+    if (!isloggedin() || isguestuser()) {
+        return;
+    }
+
+    // Enlace al marketplace (estudiantes y profesores)
+    if (has_capability('local/meritcoin:viewmarketplace', $context)) {
+        $nav->add(
+            get_string('marketplacetitle', 'local_meritcoin'),
+            new moodle_url('/local/meritcoin/marketplace.php', ['courseid' => $course->id]),
+            navigation_node::TYPE_CUSTOM,
+            null,
+            'local_meritcoin_marketplace_' . $course->id,
+            new pix_icon('i/star-rating', get_string('marketplacetitle', 'local_meritcoin'))
+        );
+    }
+
+    // Enlace a gestionar recompensas (solo profesores/managers)
+    if (has_capability('local/meritcoin:managerewards', $context)) {
+        $nav->add(
+            get_string('rewardstitle', 'local_meritcoin'),
+            new moodle_url('/local/meritcoin/rewards.php', ['courseid' => $course->id]),
+            navigation_node::TYPE_CUSTOM,
+            null,
+            'local_meritcoin_rewards_' . $course->id,
+            new pix_icon('i/settings', get_string('rewardstitle', 'local_meritcoin'))
+        );
+    }
+}
