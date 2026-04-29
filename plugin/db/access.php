@@ -96,4 +96,25 @@ $capabilities = [
             'manager'        => CAP_ALLOW,
         ],
     ],
-];
+
+    // Permiso para que el profesor cree/gestione recompensas del marketplace.
+    'local/meritcoin:managerewards' => [
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes'   => [
+            'editingteacher' => CAP_ALLOW,
+            'manager'        => CAP_ALLOW,
+        ],
+    ],
+
+    // Permiso para que el estudiante vea y canjee recompensas.
+    'local/meritcoin:viewmarketplace' => [
+        'captype'      => 'read',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes'   => [
+            'student'        => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+            'manager'        => CAP_ALLOW,
+        ],
+    ],
+],
