@@ -215,7 +215,7 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
     }
 
     // ── v0.3.0: marketplace ── recompensas y canjes ──────────────────────────────
-    if ($oldversion < 2026042802) {
+    if ($oldversion < 2026042804) {
 
         $table = new xmldb_table('local_meritcoin_rewards');
         if (!$dbman->table_exists($table)) {
@@ -256,7 +256,7 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
             $dbman->create_table($table);
         }
 
-        upgrade_plugin_savepoint(true, 2026042802, 'local', 'meritcoin');
+        upgrade_plugin_savepoint(true, 2026042804, 'local', 'meritcoin');
     }
 
     return true;

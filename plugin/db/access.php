@@ -113,8 +113,8 @@ $capabilities = [
         'contextlevel' => CONTEXT_COURSE,
         'archetypes'   => [
             'student'        => CAP_ALLOW,
-            'editingteacher' => CAP_ALLOW,
-            'manager'        => CAP_ALLOW,
+            'editingteacher' => CAP_PREVENT,
+            'manager'        => CAP_PREVENT,
         ],
     ],
 ];
