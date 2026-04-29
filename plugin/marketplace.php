@@ -26,21 +26,20 @@ $PAGE->requires->css(new moodle_url('/local/meritcoin/styles/dashboard.css'));
 $course_config = $DB->get_record('local_meritcoin_course_config', ['courseid' => $courseid]);
 $coin_symbol   = $course_config ? $course_config->coin_symbol : 'MRT';
 
-// ── Balance disponible del estudiante en ESTE curso ───────────────────────────
-// ganados = suma de coins_amount donde status = 'sent' en este curso
+// ── Balance disponible del estudiante (GLOBAL) ────────────────────────────────
 $earned = (float)$DB->get_field_sql(
     "SELECT COALESCE(SUM(coins_amount), 0)
        FROM {local_meritcoin_queue}
-      WHERE userid = :userid AND courseid = :courseid AND status = 'sent'",
-    ['userid' => $USER->id, 'courseid' => $courseid]
+      WHERE userid = :userid
+        AND status = 'sent'",
+    ['userid' => $USER->id]
 );
 
-// gastados = suma de coins_spent en redemptions de este curso
 $spent = (float)$DB->get_field_sql(
     "SELECT COALESCE(SUM(coins_spent), 0)
        FROM {local_meritcoin_redemptions}
-      WHERE userid = :userid AND courseid = :courseid",
-    ['userid' => $USER->id, 'courseid' => $courseid]
+      WHERE userid = :userid",
+    ['userid' => $USER->id]
 );
 
 $available = max(0, $earned - $spent);
@@ -128,10 +127,10 @@ echo $OUTPUT->header();
     </div>
   </div>
 
-  <!-- Aviso retroactividad -->
-  <div class="alert alert-warning d-flex align-items-start gap-2 mb-4" role="alert">
-    <i class="fa fa-exclamation-triangle mt-1"></i>
-    <span><?= get_string('marketplaceretroacwarning', 'local_meritcoin') ?></span>
+  <div class="mrt-info-banner d-flex align-items-center gap-2 mb-4 px-3 py-2 rounded"
+     style="background:var(--bs-warning-bg-subtle, #fff8e1); border-left: 3px solid #f59e0b;">
+    <i class="fa fa-clock text-warning"></i>
+    <small class="text-muted"><?= get_string('marketplaceretroacwarning', 'local_meritcoin') ?></small>
   </div>
 
   <!-- Catálogo -->
@@ -172,9 +171,8 @@ echo $OUTPUT->header();
                   </span>
                 <?php else: ?>
                   <form method="post"
-                        action="<?= new moodle_url('/local/meritcoin/marketplace.php', ['courseid' => $courseid]) ?>"
-                        onsubmit="return confirmRedeem(this)">
-                    <?= sesskey_form_element() ?>
+                        action="<?= new moodle_url('/local/meritcoin/marketplace.php', ['courseid' => $courseid]) ?>">
+                    <input type="hidden" name="sesskey" value="<?= sesskey() ?>">
                     <input type="hidden" name="action" value="redeem">
                     <input type="hidden" name="rid" value="<?= $r->id ?>">
                     <input type="hidden" data-reward-name="<?= s($r->name) ?>"
@@ -194,19 +192,5 @@ echo $OUTPUT->header();
   <?php endif; ?>
 
 </div>
-
-<script>
-function confirmRedeem(form) {
-    var input      = form.querySelector('[data-reward-name]');
-    var name       = input.getAttribute('data-reward-name');
-    var price      = input.getAttribute('data-reward-price');
-    var symbol     = input.getAttribute('data-coin-symbol');
-    var msg        = '<?= get_string('marketplaceconfirm', 'local_meritcoin') ?>'
-                         .replace('{name}', name)
-                         .replace('{price}', price)
-                         .replace('{symbol}', symbol);
-    return confirm(msg);
-}
-</script>
 
 <?php echo $OUTPUT->footer(); ?>
