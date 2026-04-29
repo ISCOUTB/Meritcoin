@@ -214,5 +214,50 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026042801, 'local', 'meritcoin');
     }
 
+    // ── v0.3.0: marketplace ── recompensas y canjes ──────────────────────────────
+    if ($oldversion < 2026042802) {
+
+        $table = new xmldb_table('local_meritcoin_rewards');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id',           XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+            $table->add_field('courseid',     XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, null);
+            $table->add_field('teacherid',    XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, null);
+            $table->add_field('name',         XMLDB_TYPE_CHAR,    '255',  null, XMLDB_NOTNULL, null, null);
+            $table->add_field('description',  XMLDB_TYPE_TEXT,    null,   null, false,         null, null);
+            $table->add_field('price_mrt',    XMLDB_TYPE_NUMBER,  '10,2', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('active',       XMLDB_TYPE_INTEGER, '1',    null, XMLDB_NOTNULL, null, '1');
+            $table->add_field('timecreated',  XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, null);
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, null);
+
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_index('idx_course',  XMLDB_INDEX_NOTUNIQUE, ['courseid']);
+            $table->add_index('idx_teacher', XMLDB_INDEX_NOTUNIQUE, ['teacherid']);
+            $table->add_index('idx_active',  XMLDB_INDEX_NOTUNIQUE, ['active']);
+
+            $dbman->create_table($table);
+        }
+
+        $table = new xmldb_table('local_meritcoin_redemptions');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id',           XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+            $table->add_field('userid',       XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, null);
+            $table->add_field('rewardid',     XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, null);
+            $table->add_field('courseid',     XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, null);
+            $table->add_field('coins_spent',  XMLDB_TYPE_NUMBER,  '10,2', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('tx_hash',      XMLDB_TYPE_CHAR,    '66',   null, false,         null, null);
+            $table->add_field('timecreated',  XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, null);
+
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_index('idx_user',       XMLDB_INDEX_NOTUNIQUE, ['userid']);
+            $table->add_index('idx_reward',     XMLDB_INDEX_NOTUNIQUE, ['rewardid']);
+            $table->add_index('idx_course',     XMLDB_INDEX_NOTUNIQUE, ['courseid']);
+            $table->add_index('uq_user_reward', XMLDB_INDEX_UNIQUE,    ['userid', 'rewardid']);
+
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026042802, 'local', 'meritcoin');
+    }
+
     return true;
 }

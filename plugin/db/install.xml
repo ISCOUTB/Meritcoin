@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/meritcoin/db" VERSION="2026042801" COMMENT="MeritCoin plugin tables"
+<XMLDB PATH="local/meritcoin/db" VERSION="2026042802" COMMENT="MeritCoin plugin tables"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -179,6 +179,49 @@
         <KEY NAME="uq_courseid" TYPE="unique"  FIELDS="courseid"
              COMMENT="Un registro de configuracion por curso"/>
       </KEYS>
+    </TABLE>
+
+    <TABLE NAME="local_meritcoin_rewards" COMMENT="Marketplace rewards created by teachers">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid"     TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="teacherid"    TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="name"         TYPE="char"   LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="description"  TYPE="text"   NOTNULL="false"/>
+        <FIELD NAME="price_mrt"    TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="true"/>
+        <FIELD NAME="active"       TYPE="int"    LENGTH="1"   NOTNULL="true" DEFAULT="1"/>
+        <FIELD NAME="timecreated"  TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="timemodified" TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_course"  UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="idx_teacher" UNIQUE="false" FIELDS="teacherid"/>
+        <INDEX NAME="idx_active"  UNIQUE="false" FIELDS="active"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="local_meritcoin_redemptions" COMMENT="Marketplace redemption history">
+      <FIELDS>
+        <FIELD NAME="id"          TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid"      TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="rewardid"    TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="courseid"    TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="coins_spent" TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="true"/>
+        <FIELD NAME="tx_hash"     TYPE="char"   LENGTH="66"  NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_user"       UNIQUE="false" FIELDS="userid"/>
+        <INDEX NAME="idx_reward"     UNIQUE="false" FIELDS="rewardid"/>
+        <INDEX NAME="idx_course"     UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="uq_user_reward" UNIQUE="true"  FIELDS="userid,rewardid"/>
+      </INDEXES>
     </TABLE>
 
   </TABLES>
