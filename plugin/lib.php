@@ -253,7 +253,7 @@ function local_meritcoin_get_backend_student_data(int $userid, ?string $wallet):
         $curl->setopt([
             'CURLOPT_TIMEOUT'        => 5,
             'CURLOPT_CONNECTTIMEOUT' => 3,
-            'CURLOPT_RETURNTRANSFER' => true,
+            'CURLOPT_RETURNTRANSFER' => true
         ]);
 
         $url      = rtrim($backendurl, '/') . '/students/' . urlencode($wallet) . '/summary';
