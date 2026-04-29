@@ -170,3 +170,17 @@ $string['rewarddeleted']        = 'Recompensa eliminada.';
 $string['rewardinvaliddata']    = 'Datos inválidos. Verifica el nombre y el precio.';
 $string['rewardhasredemptions'] = 'No se puede eliminar: ya hay estudiantes que canjearon esta recompensa.';
 $string['backtocourse']         = 'Volver al curso';
+
+// ── Marketplace: vista estudiante ─────────────────────────────────────────────
+$string['marketplacetitle']          = 'Mercado de Recompensas';
+$string['marketplaceavailable']      = 'Saldo disponible en este curso';
+$string['marketplaceempty']          = 'El profesor aún no ha publicado recompensas para este curso.';
+$string['marketplaceretroacwarning'] = 'Tu saldo refleja únicamente la actividad registrada desde que MeritCoin fue instalado. Cursos o actividades completados antes de la instalación no generaron tokens.';
+$string['marketplaceredeembtn']      = 'Canjear';
+$string['marketplaceredeemedbadge']  = 'Ya canjeado';
+$string['marketplacenotenoughbtn']   = 'Saldo insuficiente';
+$string['marketplaceconfirm']        = '¿Canjear "{name}" por {price} {symbol}? Esta acción no se puede deshacer.';
+$string['marketplaceredeemed']       = '¡Recompensa canjeada exitosamente!';
+$string['marketplacerewardnotfound'] = 'La recompensa no existe o ya no está disponible.';
+$string['marketplacealreadyredeemed']= 'Ya canjeaste esta recompensa anteriormente.';
+$string['marketplacenotenough']      = 'No tienes suficientes tokens en este curso para canjear esta recompensa.';

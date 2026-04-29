@@ -170,3 +170,17 @@ $string['rewarddeleted']        = 'Reward deleted.';
 $string['rewardinvaliddata']    = 'Invalid data. Please check the name and price.';
 $string['rewardhasredemptions'] = 'Cannot delete: students have already redeemed this reward.';
 $string['backtocourse']         = 'Back to course';
+
+// ── Marketplace: student view ─────────────────────────────────────────────────
+$string['marketplacetitle']          = 'Rewards Marketplace';
+$string['marketplaceavailable']      = 'Available balance in this course';
+$string['marketplaceempty']          = 'The teacher has not published any rewards for this course yet.';
+$string['marketplaceretroacwarning'] = 'Your balance only reflects activity recorded since MeritCoin was installed. Courses or activities completed before installation did not generate tokens.';
+$string['marketplaceredeembtn']      = 'Redeem';
+$string['marketplaceredeemedbadge']  = 'Already redeemed';
+$string['marketplacenotenoughbtn']   = 'Insufficient balance';
+$string['marketplaceconfirm']        = 'Redeem "{name}" for {price} {symbol}? This action cannot be undone.';
+$string['marketplaceredeemed']       = 'Reward redeemed successfully!';
+$string['marketplacerewardnotfound'] = 'The reward does not exist or is no longer available.';
+$string['marketplacealreadyredeemed']= 'You have already redeemed this reward.';
+$string['marketplacenotenough']      = 'You do not have enough tokens in this course to redeem this reward.';
