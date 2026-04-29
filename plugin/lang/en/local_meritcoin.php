@@ -184,3 +184,21 @@ $string['marketplaceredeemed']       = 'Reward redeemed successfully!';
 $string['marketplacerewardnotfound'] = 'The reward does not exist or is no longer available.';
 $string['marketplacealreadyredeemed']= 'You have already redeemed this reward.';
 $string['marketplacenotenough']      = 'You do not have enough tokens in this course to redeem this reward.';
+
+// ── Admin marketplace ─────────────────────────────────────────────────────────
+$string['adminmarketplacetitle']  = 'MeritCoin — Marketplace Panel';
+$string['adminrewardsactive']     = 'Active rewards';
+$string['adminrewardsinactive']   = 'Inactive rewards';
+$string['admintotalredemptions']  = 'Total redemptions';
+$string['admintotalspent']        = 'Tokens spent';
+$string['adminteacher']           = 'Teacher';
+$string['admincolstudent']        = 'Student';
+$string['admincoinsspent']        = 'Tokens spent';
+$string['admintxhash']            = 'TX Hash';
+$string['tabrewards']             = 'Rewards';
+$string['tabredemptions']         = 'Redemption history';
+$string['filterbycourse']         = 'Filter by course';
+$string['allcourses']             = 'All courses';
+$string['adminrewardsempty']      = 'No rewards have been created yet.';
+$string['adminredemptionsempty']  = 'No redemptions recorded yet.';
+$string['pluginsettings']         = 'Plugin settings';

@@ -184,3 +184,21 @@ $string['marketplaceredeemed']       = '¡Recompensa canjeada exitosamente!';
 $string['marketplacerewardnotfound'] = 'La recompensa no existe o ya no está disponible.';
 $string['marketplacealreadyredeemed']= 'Ya canjeaste esta recompensa anteriormente.';
 $string['marketplacenotenough']      = 'No tienes suficientes tokens en este curso para canjear esta recompensa.';
+
+// ── Admin marketplace ─────────────────────────────────────────────────────────
+$string['adminmarketplacetitle']  = 'MeritCoin — Panel del Marketplace';
+$string['adminrewardsactive']     = 'Recompensas activas';
+$string['adminrewardsinactive']   = 'Recompensas inactivas';
+$string['admintotalredemptions']  = 'Canjes totales';
+$string['admintotalspent']        = 'Tokens gastados';
+$string['adminteacher']           = 'Profesor';
+$string['admincolstudent']        = 'Estudiante';
+$string['admincoinsspent']        = 'Tokens gastados';
+$string['admintxhash']            = 'TX Hash';
+$string['tabrewards']             = 'Recompensas';
+$string['tabredemptions']         = 'Historial de canjes';
+$string['filterbycourse']         = 'Filtrar por curso';
+$string['allcourses']             = 'Todos los cursos';
+$string['adminrewardsempty']      = 'No hay recompensas creadas aún.';
+$string['adminredemptionsempty']  = 'No hay canjes registrados aún.';
+$string['pluginsettings']         = 'Configuración del plugin';
