@@ -6,6 +6,24 @@ require_once('../../config.php');
 require_once($CFG->dirroot . '/local/meritcoin/lib.php');
 
 require_login();
+
+// Verificar si es profesor/manager en CUALQUIER curso
+$redirectteacher = false;
+$courses = enrol_get_users_courses($USER->id, true);
+
+foreach ($courses as $course) {
+    $ctx = context_course::instance($course->id);
+    if (has_capability('local/meritcoin:managerewards', $ctx) ||
+        has_capability('local/meritcoin:manage_rules', $ctx)) {
+        $redirectteacher = true;
+        break;
+    }
+}
+
+if ($redirectteacher) {
+    redirect(new moodle_url('/my'));
+}
+
 $PAGE->set_url(new moodle_url('/local/meritcoin/dashboard.php'));
 $PAGE->set_context(context_system::instance());
 $PAGE->set_title(get_string('dashboardtitle', 'local_meritcoin'));
@@ -18,14 +36,34 @@ global $USER, $DB, $OUTPUT;
 $wallet  = local_meritcoin_get_user_wallet($USER->id);
 $stats   = local_meritcoin_get_user_stats($USER->id);
 
+$earned_local = (float)$DB->get_field_sql(
+    "SELECT COALESCE(SUM(coins_amount), 0)
+       FROM {local_meritcoin_queue}
+      WHERE userid = :userid AND status = 'sent'",
+    ['userid' => $USER->id]
+);
+$total_spent = (float)$DB->get_field_sql(
+    "SELECT COALESCE(SUM(coins_spent), 0)
+       FROM {local_meritcoin_redemptions}
+      WHERE userid = :userid",
+    ['userid' => $USER->id]
+);
+$real_balance = max(0, $earned_local - $total_spent);
+
 // ✅ Columnas correctas: userid, timecreated
-$events  = $DB->get_records(
-    'local_meritcoin_queue',
-    ['userid' => $USER->id],
-    'timecreated DESC',
-    '*',
-    0,
-    20
+$events = $DB->get_records_sql(
+    "SELECT q.*,
+            (SELECT COUNT(*)
+               FROM {local_meritcoin_queue} q2
+              WHERE q2.userid      = q.userid
+                AND q2.cmid        = q.cmid
+                AND q2.cmid       IS NOT NULL
+                AND q2.timecreated <= q.timecreated) AS reeval_count
+       FROM {local_meritcoin_queue} q
+      WHERE q.userid = :userid
+      ORDER BY q.timecreated DESC
+      LIMIT 20",
+    ['userid' => $USER->id]
 );
 
 // Datos del backend (pueden fallar silenciosamente)
@@ -68,7 +106,14 @@ echo $OUTPUT->header();
           <div class="mrt-balance-label"><?= get_string('mrtbalance', 'local_meritcoin') ?></div>
           <div class="mrt-balance-value">
             <?php if ($backend['backend_available']): ?>
-              <?= number_format($backend['mrtbalance'] ?? 0, 2) ?> <span class="mrt-ticker">MRT</span>
+              <?php
+              $total_spent = (float)$DB->get_field_sql(
+                  "SELECT COALESCE(SUM(coins_spent), 0) FROM {local_meritcoin_redemptions} WHERE userid = :userid",
+                  ['userid' => $USER->id]
+              );
+              $real_balance = max(0, ($backend['mrt_balance'] ?? 0) - $total_spent);
+              ?>
+<?= number_format($real_balance, 2) ?> <span class="mrt-ticker">MRT</span>
             <?php else: ?>
               <span class="mrt-balance-unknown">--</span> <span class="mrt-ticker">MRT</span>
             <?php endif; ?>
@@ -90,48 +135,6 @@ echo $OUTPUT->header();
         <?php else: ?>
           <span class="badge bg-secondary"><?= get_string('no_wallet', 'local_meritcoin') ?></span>
         <?php endif; ?>
-      </div>
-    </div>
-  </div>
-
-  <!-- ESTADÍSTICAS -->
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-      <div class="mrt-stat-card card h-100">
-        <div class="card-body text-center">
-          <div class="mrt-stat-icon text-success"><i class="fa fa-graduation-cap fa-2x"></i></div>
-          <div class="mrt-stat-number"><?= $stats['completions'] ?></div>
-          <div class="mrt-stat-label"><?= get_string('statcompletions', 'local_meritcoin') ?></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="mrt-stat-card card h-100">
-        <div class="card-body text-center">
-          <div class="mrt-stat-icon text-warning"><i class="fa fa-star fa-2x"></i></div>
-          <div class="mrt-stat-number"><?= $stats['avg_grade'] !== null ? $stats['avg_grade'] : '--' ?></div>
-          <div class="mrt-stat-label"><?= get_string('statavggrade', 'local_meritcoin') ?></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="mrt-stat-card card h-100">
-        <div class="card-body text-center">
-          <div class="mrt-stat-icon text-primary"><i class="fa fa-paper-plane fa-2x"></i></div>
-          <div class="mrt-stat-number"><?= $stats['sent_events'] ?></div>
-          <div class="mrt-stat-label"><?= get_string('statsent', 'local_meritcoin') ?></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="mrt-stat-card card h-100">
-        <div class="card-body text-center">
-          <div class="mrt-stat-icon <?= $stats['failed_events'] > 0 ? 'text-danger' : 'text-secondary' ?>">
-            <i class="fa fa-<?= $stats['failed_events'] > 0 ? 'exclamation-circle' : 'check-circle' ?> fa-2x"></i>
-          </div>
-          <div class="mrt-stat-number"><?= $stats['pending_events'] ?></div>
-          <div class="mrt-stat-label"><?= get_string('statpending', 'local_meritcoin') ?></div>
-        </div>
       </div>
     </div>
   </div>
@@ -202,15 +205,18 @@ echo $OUTPUT->header();
               <tr>
                 <th><?= get_string('coltype', 'local_meritcoin') ?></th>
                 <th><?= get_string('colcourse', 'local_meritcoin') ?></th>
+                <th><?= get_string('colactivity', 'local_meritcoin') ?></th>
                 <th><?= get_string('colgrade', 'local_meritcoin') ?></th>
+                <th><?= get_string('col_reevals', 'local_meritcoin') ?></th>
                 <th><?= get_string('colstatus', 'local_meritcoin') ?></th>
                 <th><?= get_string('coldate', 'local_meritcoin') ?></th>
               </tr>
             </thead>
             <tbody>
               <?php foreach ($events as $event):
-                // ✅ Columna correcta: courseid (no course_id)
                 $course = $DB->get_record('course', ['id' => $event->courseid], 'fullname', IGNORE_MISSING);
+                $activitylabel = !empty($event->activity_name) ? $event->activity_name : '—';
+                $reevals = (int)($event->reeval_count ?? 0);
               ?>
                 <tr>
                   <td>
@@ -224,21 +230,31 @@ echo $OUTPUT->header();
                       </span>
                     <?php endif; ?>
                   </td>
-                  <td class="text-truncate" style="max-width:200px;"
+                  <td class="text-truncate" style="max-width:160px;"
                       title="<?= s($course ? $course->fullname : '') ?>">
                     <?= s($course ? $course->fullname : 'Curso ' . $event->courseid) ?>
+                  </td>
+                  <td class="text-truncate" style="max-width:160px;"
+                      title="<?= s($activitylabel) ?>">
+                    <?= s($activitylabel) ?>
                   </td>
                   <td>
                     <?= $event->grade !== null
                         ? number_format((float)$event->grade, 1)
                         : '<span class="text-muted">—</span>' ?>
                   </td>
+                  <td class="text-center">
+                    <?php if (!empty($event->cmid) && $reevals > 1): ?>
+                      <span class="badge bg-warning text-dark" title="<?= get_string('col_reevals_hint', 'local_meritcoin') ?>">
+                        <i class="fa fa-refresh me-1"></i><?= $reevals ?>
+                      </span>
+                    <?php else: ?>
+                      <span class="text-muted">—</span>
+                    <?php endif; ?>
+                  </td>
                   <td><?= local_meritcoin_status_badge($event->status) ?></td>
                   <td class="text-nowrap">
-                    <?php
-                      // ✅ Columna correcta: timecreated (no created_at)
-                      echo userdate($event->timecreated, get_string('strftimedatetimeshort', 'langconfig'));
-                    ?>
+                    <?= userdate($event->timecreated, get_string('strftimedatetimeshort', 'langconfig')) ?>
                   </td>
                 </tr>
               <?php endforeach; ?>

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/meritcoin/db" VERSION="2026031004" COMMENT="MeritCoin plugin tables"
+<XMLDB PATH="local/meritcoin/db" VERSION="2026042802" COMMENT="MeritCoin plugin tables"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -7,10 +7,11 @@
     <!-- ═══════════════════════════════════════════════════════════════════════
          Cola de eventos pendientes de envío al backend.
          El observer encola aquí y la tarea programada los envía.
+         También sirve como buffer cuando el evento queda en pending_wallet.
          ═══════════════════════════════════════════════════════════════════════ -->
     <TABLE NAME="local_meritcoin_queue" COMMENT="Queue of academic events to send to MeritCoin backend">
       <FIELDS>
-        <FIELD NAME="id"             TYPE="int"    LENGTH="10"  NOTNULL="true"  SEQUENCE="true"/>
+        <FIELD NAME="id"             TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="event_id"       TYPE="char"   LENGTH="255" NOTNULL="true"
                COMMENT="Unique event ID for idempotency"/>
         <FIELD NAME="userid"         TYPE="int"    LENGTH="10"  NOTNULL="true"
@@ -27,13 +28,13 @@
                COMMENT="Calificacion del estudiante"/>
         <FIELD NAME="coins_amount"   TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="false"
                COMMENT="Monedas calculadas segun la regla del curso/actividad"/>
-        <FIELD NAME="student_wallet" TYPE="char"   LENGTH="42"  NOTNULL="true"
-               COMMENT="Ethereum wallet del estudiante"/>
+        <FIELD NAME="student_wallet" TYPE="char"   LENGTH="42"  NOTNULL="false"
+               COMMENT="Ethereum wallet; null mientras el evento queda pending_wallet"/>
         <FIELD NAME="payload"        TYPE="text"   NOTNULL="true"
                COMMENT="JSON payload completo para el backend"/>
-        <FIELD NAME="status"         TYPE="char"   LENGTH="20"  NOTNULL="true"  DEFAULT="pending"
-               COMMENT="pending, sent, failed"/>
-        <FIELD NAME="attempts"       TYPE="int"    LENGTH="3"   NOTNULL="true"  DEFAULT="0"
+        <FIELD NAME="status"         TYPE="char"   LENGTH="20"  NOTNULL="true" DEFAULT="pending"
+               COMMENT="pending, pending_wallet, sent, failed"/>
+        <FIELD NAME="attempts"       TYPE="int"    LENGTH="3"   NOTNULL="true" DEFAULT="0"
                COMMENT="Numero de intentos de envio"/>
         <FIELD NAME="last_error"     TYPE="text"   NOTNULL="false"
                COMMENT="Ultimo error del backend"/>
@@ -44,30 +45,157 @@
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="idx_event_id" UNIQUE="true"  FIELDS="event_id" COMMENT="Idempotencia"/>
-        <INDEX NAME="idx_status"   UNIQUE="false" FIELDS="status"/>
-        <INDEX NAME="idx_userid"   UNIQUE="false" FIELDS="userid"/>
+        <INDEX NAME="queue_event_id_uix"  UNIQUE="true"  FIELDS="event_id"
+               COMMENT="Idempotencia: un solo registro por event_id"/>
+        <INDEX NAME="queue_status_idx"    UNIQUE="false" FIELDS="status"
+               COMMENT="Filtra por pending / pending_wallet en la tarea programada"/>
+        <INDEX NAME="queue_userid_idx"    UNIQUE="false" FIELDS="userid"
+               COMMENT="Filtra eventos por usuario en el dashboard"/>
+        <INDEX NAME="queue_courseid_idx"  UNIQUE="false" FIELDS="courseid"
+               COMMENT="Filtra eventos por curso en rules_service"/>
       </INDEXES>
     </TABLE>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          Reglas de recompensa por curso y/o actividad.
-         Si cmid es NULL, la regla aplica a todo el curso.
-         Si cmid tiene valor, aplica solo a esa actividad.
+         Si cmid es NULL, la regla aplica a todo el curso (rule_scope=course).
+         Si cmid tiene valor, aplica solo a esa actividad (rule_scope=activity).
+         La unicidad real se controla en PHP (editrule.php) porque cmid puede
+         ser NULL y los índices únicos no garantizan unicidad sobre NULLs en
+         MySQL/MariaDB.
          ═══════════════════════════════════════════════════════════════════════ -->
-    <TABLE NAME="local_meritcoin_rules" COMMENT="Reward rules per course and activity">
+    <TABLE NAME="local_meritcoin_rules" COMMENT="Coins awarded per activity or course">
+       <FIELDS>
+        <FIELD NAME="id"           TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid"     TYPE="int"    LENGTH="10"  NOTNULL="true"  DEFAULT="0"/>
+        <FIELD NAME="cmid"         TYPE="int"    LENGTH="10"  NOTNULL="false"
+               COMMENT="NULL = regla de curso o tipo; valor = regla de actividad específica"/>
+        <FIELD NAME="rule_scope"   TYPE="char"   LENGTH="20"  NOTNULL="true"  DEFAULT="activity"
+               COMMENT="activity, activity_type o course"/>
+        <FIELD NAME="mod_type"     TYPE="char"   LENGTH="50"  NOTNULL="false"
+               COMMENT="Tipo de módulo para scope=activity_type (assign, forum, quiz, etc.)"/>
+        <FIELD NAME="activityname" TYPE="char"   LENGTH="255" NOTNULL="false"
+               COMMENT="Nombre visible de la actividad, tipo o etiqueta de la regla"/>
+        <FIELD NAME="coins_amount" TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="true" DEFAULT="0.00"
+               COMMENT="Cantidad fija de monedas para esta regla"/>
+        <FIELD NAME="coin_symbol"  TYPE="char"   LENGTH="20"  NOTNULL="true"  DEFAULT="MRT"
+               COMMENT="Simbolo de la moneda del curso"/>
+        <FIELD NAME="min_grade"    TYPE="number" LENGTH="10"  DECIMALS="5" NOTNULL="false"
+               COMMENT="Nota mínima para activar la regla; NULL = sin umbral"/>
+        <FIELD NAME="enabled"      TYPE="int"    LENGTH="1"   NOTNULL="true"  DEFAULT="1"
+               COMMENT="1 = activa, 0 = deshabilitada"/>
+        <FIELD NAME="timecreated"  TYPE="int"    LENGTH="10"  NOTNULL="true"  DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int"    LENGTH="10"  NOTNULL="true"  DEFAULT="0"/>
+       </FIELDS>
+       <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+       </KEYS>
+       <INDEXES>
+        <INDEX NAME="rules_courseid_idx"          UNIQUE="false" FIELDS="courseid"
+               COMMENT="Búsqueda de reglas por curso"/>
+        <INDEX NAME="rules_course_cmid_scope_idx" UNIQUE="false" FIELDS="courseid, cmid, rule_scope"
+               COMMENT="Rendimiento en búsquedas de regla específica; unicidad gestionada en PHP"/>
+        <INDEX NAME="rules_course_modtype_idx"    UNIQUE="false" FIELDS="courseid, mod_type, rule_scope"
+               COMMENT="Búsqueda de reglas por tipo de módulo"/>
+       </INDEXES>
+    </TABLE>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         Ledger de ganancias por curso.
+         Registra cada evento enviado con éxito para calcular el saldo
+         gastable por curso sin depender del balance global de la wallet.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <TABLE NAME="local_meritcoin_earnings" COMMENT="Coins earned per course/activity">
+      <FIELDS>
+        <FIELD NAME="id"             TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="event_id"       TYPE="char"   LENGTH="255" NOTNULL="true"
+               COMMENT="Event ID already accepted; guarantees idempotency"/>
+        <FIELD NAME="userid"         TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="student_wallet" TYPE="char"   LENGTH="42"  NOTNULL="false"
+               COMMENT="Global wallet of the student, if available at earning time"/>
+        <FIELD NAME="courseid"       TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"
+               COMMENT="Course where the coins were earned"/>
+        <FIELD NAME="cmid"           TYPE="int"    LENGTH="10"  NOTNULL="false"
+               COMMENT="Activity; null for course-level events"/>
+        <FIELD NAME="event_type"     TYPE="char"   LENGTH="50"  NOTNULL="true"
+               COMMENT="completion o grade"/>
+        <FIELD NAME="coins_earned"   TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="true" DEFAULT="0.00"/>
+        <FIELD NAME="coin_symbol"    TYPE="char"   LENGTH="20"  NOTNULL="true" DEFAULT="MRT"
+               COMMENT="Simbolo en el momento de la ganancia"/>
+        <FIELD NAME="timecreated"    TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="earnings_event_id_uix"      UNIQUE="true"  FIELDS="event_id"
+               COMMENT="Un solo registro por event_id"/>
+        <INDEX NAME="earnings_user_course_idx"   UNIQUE="false" FIELDS="userid, courseid"
+               COMMENT="SUM de monedas por usuario y curso en rules_service"/>
+      </INDEXES>
+    </TABLE>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         Ledger de gasto por curso.
+         El mercado de recompensas descuenta aquí para controlar el saldo
+         gastable por curso de forma independiente al balance global.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <TABLE NAME="local_meritcoin_spend" COMMENT="Coins spent in course reward market">
+      <FIELDS>
+        <FIELD NAME="id"             TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid"         TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="student_wallet" TYPE="char"   LENGTH="42"  NOTNULL="false"/>
+        <FIELD NAME="courseid"       TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"/>
+        <FIELD NAME="reward_code"    TYPE="char"   LENGTH="100" NOTNULL="true"
+               COMMENT="Codigo interno de la recompensa canjeada"/>
+        <FIELD NAME="coins_spent"    TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="true" DEFAULT="0.00"/>
+        <FIELD NAME="status"         TYPE="char"   LENGTH="20"  NOTNULL="true" DEFAULT="approved"
+               COMMENT="approved, rejected, cancelled"/>
+        <FIELD NAME="timecreated"    TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="spend_user_course_idx" UNIQUE="false" FIELDS="userid, courseid"
+               COMMENT="SUM de gasto por usuario y curso en rules_service"/>
+      </INDEXES>
+    </TABLE>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         Configuración de moneda por curso.
+         Permite que cada curso tenga su propio nombre/símbolo de moneda
+         y un contrato inteligente específico.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <TABLE NAME="local_meritcoin_course_config" COMMENT="Per-course coin configuration">
+      <FIELDS>
+        <FIELD NAME="id"               TYPE="int"  LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="courseid"         TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="coin_name"        TYPE="char" LENGTH="50" NOTNULL="true" DEFAULT="MeritCoin"
+               COMMENT="Nombre de la moneda (ej: BioToken, MathCoin)"/>
+        <FIELD NAME="coin_symbol"      TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="MRT"
+               COMMENT="Simbolo de la moneda (ej: BIO, MTH)"/>
+        <FIELD NAME="contract_address" TYPE="char" LENGTH="42" NOTNULL="false" DEFAULT=""
+               COMMENT="Contrato ERC-20 especifico del curso (opcional)"/>
+        <FIELD NAME="timecreated"      TYPE="int"  LENGTH="10" NOTNULL="true"/>
+        <FIELD NAME="timemodified"     TYPE="int"  LENGTH="10" NOTNULL="true"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary"     TYPE="primary" FIELDS="id"/>
+        <KEY NAME="uq_courseid" TYPE="unique"  FIELDS="courseid"
+             COMMENT="Un registro de configuracion por curso"/>
+      </KEYS>
+    </TABLE>
+
+    <TABLE NAME="local_meritcoin_rewards" COMMENT="Marketplace rewards created by teachers">
       <FIELDS>
         <FIELD NAME="id"           TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="courseid"     TYPE="int"    LENGTH="10"  NOTNULL="true"
-               COMMENT="ID del curso al que aplica esta regla"/>
-        <FIELD NAME="cmid"         TYPE="int"    LENGTH="10"  NOTNULL="false"
-               COMMENT="ID del course module. NULL = regla para todo el curso"/>
-        <FIELD NAME="coins_fixed"  TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="false"
-               COMMENT="Monedas fijas al completar o calificar (ej: 10 monedas por entregar)"/>
-        <FIELD NAME="coins_pct"    TYPE="number" LENGTH="5"   DECIMALS="2" NOTNULL="false"
-               COMMENT="Porcentaje de la nota convertido en monedas (ej: 0.5 = nota*0.5)"/>
-        <FIELD NAME="min_grade"    TYPE="number" LENGTH="10"  DECIMALS="5" NOTNULL="true" DEFAULT="0"
-               COMMENT="Nota minima para ganar monedas"/>
+        <FIELD NAME="courseid"     TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="teacherid"    TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="name"         TYPE="char"   LENGTH="255" NOTNULL="true"/>
+        <FIELD NAME="description"  TYPE="text"   NOTNULL="false"/>
+        <FIELD NAME="price_mrt"    TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="true"/>
+        <FIELD NAME="active"       TYPE="int"    LENGTH="1"   NOTNULL="true" DEFAULT="1"/>
         <FIELD NAME="timecreated"  TYPE="int"    LENGTH="10"  NOTNULL="true"/>
         <FIELD NAME="timemodified" TYPE="int"    LENGTH="10"  NOTNULL="true"/>
       </FIELDS>
@@ -75,33 +203,31 @@
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="idx_course"   UNIQUE="false" FIELDS="courseid"/>
-        <INDEX NAME="idx_cm"       UNIQUE="false" FIELDS="cmid"/>
+        <INDEX NAME="idx_course"  UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="idx_teacher" UNIQUE="false" FIELDS="teacherid"/>
+        <INDEX NAME="idx_active"  UNIQUE="false" FIELDS="active"/>
       </INDEXES>
     </TABLE>
 
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         Configuracion de moneda por curso.
-         Permite que cada curso tenga su propio nombre/simbolo de moneda
-         y un contrato inteligente especifico.
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <TABLE NAME="local_meritcoin_course_config" COMMENT="Per-course coin configuration">
+    <TABLE NAME="local_meritcoin_redemptions" COMMENT="Marketplace redemption history">
       <FIELDS>
-        <FIELD NAME="id"               TYPE="int"  LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="courseid"         TYPE="int"  LENGTH="10"  NOTNULL="true"/>
-        <FIELD NAME="coin_name"        TYPE="char" LENGTH="50"  NOTNULL="true" DEFAULT="MeritCoin"
-               COMMENT="Nombre de la moneda (ej: BioToken, MathCoin)"/>
-        <FIELD NAME="coin_symbol"      TYPE="char" LENGTH="10"  NOTNULL="true" DEFAULT="MRT"
-               COMMENT="Simbolo de la moneda (ej: BIO, MTH)"/>
-        <FIELD NAME="contract_address" TYPE="char" LENGTH="42"  NOTNULL="false" DEFAULT=""
-               COMMENT="Direccion del contrato ERC-20 especifico del curso (opcional)"/>
-        <FIELD NAME="timecreated"      TYPE="int"  LENGTH="10"  NOTNULL="true"/>
-        <FIELD NAME="timemodified"     TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="id"          TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid"      TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="rewardid"    TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="courseid"    TYPE="int"    LENGTH="10"  NOTNULL="true"/>
+        <FIELD NAME="coins_spent" TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="true"/>
+        <FIELD NAME="tx_hash"     TYPE="char"   LENGTH="66"  NOTNULL="false"/>
+        <FIELD NAME="timecreated" TYPE="int"    LENGTH="10"  NOTNULL="true"/>
       </FIELDS>
       <KEYS>
-        <KEY NAME="primary"          TYPE="primary" FIELDS="id"/>
-        <KEY NAME="uq_courseid"      TYPE="unique"  FIELDS="courseid"/>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
       </KEYS>
+      <INDEXES>
+        <INDEX NAME="idx_user"       UNIQUE="false" FIELDS="userid"/>
+        <INDEX NAME="idx_reward"     UNIQUE="false" FIELDS="rewardid"/>
+        <INDEX NAME="idx_course"     UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="uq_user_reward" UNIQUE="true"  FIELDS="userid,rewardid"/>
+      </INDEXES>
     </TABLE>
 
   </TABLES>

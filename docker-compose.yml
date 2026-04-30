@@ -70,7 +70,7 @@ services:
       # IMPORTANTE: Moodle DEBE haber completado la instalación inicial
       # antes de montar este volumen. Si es la primera vez que levantas
       # Moodle, comenta esta línea, deja que instale, luego descomenta.
-      - ./plugin:/bitnami/moodle/local/meritcoin
+      #- ./plugin:/bitnami/moodle/local/meritcoin
     networks:
       - meritcoin-net
     entrypoint:
@@ -119,11 +119,29 @@ services:
     networks:
       - meritcoin-net
 
+  # ── Hardhat Node (blockchain local) ─────────────────────────────────────
+  hardhat:
+    image: node:20-alpine
+    container_name: meritcoin-hardhat
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "npm install --silent &&
+             npx hardhat node --hostname 0.0.0.0"
+    volumes:
+      - ./contracts:/app
+      - hardhat_modules:/app/node_modules
+    ports:
+      - "8545:8545"
+    networks:
+      - meritcoin-net
+
 volumes:
   mariadb_data:
   moodle_data:
   moodledata:
   postgres_data:
+  hardhat_modules:
 
 networks:
   meritcoin-net:

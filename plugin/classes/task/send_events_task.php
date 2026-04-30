@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - [http://moodle.org/](http://moodle.org/)
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,11 +26,14 @@ defined('MOODLE_INTERNAL') || die();
  * Esta tarea se ejecuta automáticamente cada minuto por el cron de Moodle.
  * Hace lo siguiente:
  *
- *   1. Busca eventos con status='pending' en la tabla local_meritcoin_queue
- *   2. Para cada evento, lo envía al backend FastAPI usando api_client
- *   3. Si el backend responde OK: marca el evento como 'sent'
- *   4. Si falla: incrementa el contador de intentos y guarda el error
- *   5. Si un evento falla más de 5 veces: lo marca como 'failed'
+ *   1. Primero reactiva eventos pending_wallet con wallet ya disponible;
+ *      luego procesa eventos pending en la tabla local_meritcoin_queue.
+ *   2. Para cada evento, lo envía al backend FastAPI usando api_client.
+ *   3. Si el backend responde OK: marca el evento como 'sent'.
+ *   4. Si falla: incrementa el contador de intentos y guarda el error.
+ *   5. Si un evento falla más de 5 veces: lo marca como 'failed'.
+ *   6. Si el envío fue exitoso y el evento tiene monedas: registra la ganancia
+ *      en local_meritcoin_earnings para calcular el saldo gastable por curso.
  *
  * Puedes ejecutar esta tarea manualmente desde la terminal:
  *   docker exec meritcoin-moodle php /opt/bitnami/moodle/admin/cli/scheduled_task.php \
@@ -42,7 +45,7 @@ defined('MOODLE_INTERNAL') || die();
  *
  * @package    local_meritcoin
  * @copyright  2026 Universidad Tecnológica de Bolívar
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @license    [http://www.gnu.org/copyleft/gpl.html](http://www.gnu.org/copyleft/gpl.html) GNU GPL v3 or later
  */
 class send_events_task extends \core\task\scheduled_task {
 
@@ -75,6 +78,8 @@ class send_events_task extends \core\task\scheduled_task {
             return;
         }
 
+        $this->reactivate_events_with_wallet();
+
         // ── Obtener eventos pendientes ──────────────────────────────────
         // Ordenamos por timecreated para procesar los más antiguos primero.
         $pending = $DB->get_records_select(
@@ -97,7 +102,7 @@ class send_events_task extends \core\task\scheduled_task {
         // ── Crear cliente API ───────────────────────────────────────────
         $client = new \local_meritcoin\api_client();
 
-        $sent   = 0;
+        $sent = 0;
         $failed = 0;
 
         foreach ($pending as $record) {
@@ -110,19 +115,23 @@ class send_events_task extends \core\task\scheduled_task {
 
             if ($result->success) {
                 // ── Éxito: marcar como enviado ──────────────────────────
-                $record->status       = 'sent';
+                $record->status = 'sent';
                 $record->timemodified = $now;
-                $record->attempts     = $record->attempts + 1;
-                $record->last_error   = null;
+                $record->attempts = $record->attempts + 1;
+                $record->last_error = null;
                 $DB->update_record('local_meritcoin_queue', $record);
+
+                // ── Registrar ganancia local por curso ──────────────────
+                // Este paso alimenta el saldo gastable del mercado por curso.
+                $this->record_course_earning($record);
 
                 mtrace("    ✓ Sent successfully.");
                 $sent++;
 
             } else {
                 // ── Fallo: incrementar intentos ─────────────────────────
-                $record->attempts     = $record->attempts + 1;
-                $record->last_error   = $result->error;
+                $record->attempts = $record->attempts + 1;
+                $record->last_error = $result->error;
                 $record->timemodified = $now;
 
                 if ($record->attempts >= self::MAX_ATTEMPTS) {
@@ -140,5 +149,106 @@ class send_events_task extends \core\task\scheduled_task {
         }
 
         mtrace("MeritCoin: Done. Sent={$sent}, Failed={$failed}.");
+    }
+
+    /**
+     * Reactiva eventos pending_wallet cuando el estudiante ya registró una wallet válida.
+     */
+    private function reactivate_events_with_wallet(): void {
+        global $DB;
+
+        $walletfield = get_config('local_meritcoin', 'wallet_field') ?: 'wallet';
+        $fieldid = $DB->get_field('user_info_field', 'id', ['shortname' => $walletfield]);
+
+        if (!$fieldid) {
+            mtrace("MeritCoin: Wallet profile field '{$walletfield}' not found.");
+            return;
+        }
+
+        $records = $DB->get_records_select(
+            'local_meritcoin_queue',
+            "status = :status",
+            ['status' => 'pending_wallet'],
+            'timecreated ASC',
+            '*',
+            0,
+            self::BATCH_SIZE
+        );
+
+        if (empty($records)) {
+            return;
+        }
+
+        foreach ($records as $record) {
+            $wallet = $DB->get_field('user_info_data', 'data', [
+                'userid' => $record->userid,
+                'fieldid' => $fieldid,
+            ]);
+
+            if (empty($wallet) || !preg_match('/^0x[0-9a-fA-F]{40}$/', $wallet)) {
+                continue;
+            }
+
+            $payload = json_decode($record->payload, true);
+            if (!is_array($payload)) {
+                $payload = [];
+            }
+
+            $payload['student_wallet'] = $wallet;
+
+            $record->student_wallet = $wallet;
+            $record->payload = json_encode($payload, JSON_UNESCAPED_UNICODE);
+            $record->status = 'pending';
+            $record->timemodified = time();
+            $record->last_error = null;
+
+            $DB->update_record('local_meritcoin_queue', $record);
+
+            mtrace("MeritCoin: Reactivated event {$record->event_id} after wallet registration.");
+        }
+    }
+
+    /**
+     * Registra en local_meritcoin_earnings las monedas ganadas en un evento ya enviado.
+     *
+     * Reglas:
+     *   - Solo registra una vez por event_id (idempotencia local).
+     *   - Si coins_amount es 0 o null, no inserta nada.
+     *   - El saldo gastable del curso se calculará luego como:
+     *       SUM(earnings) - SUM(spend)
+     *
+     * @param \stdClass $record Registro de la cola ya marcado como sent.
+     */
+    private function record_course_earning(\stdClass $record): void {
+        global $DB;
+
+        $coins = isset($record->coins_amount) ? (float)$record->coins_amount : 0.0;
+        if ($coins <= 0) {
+            return;
+        }
+
+        if ($DB->record_exists('local_meritcoin_earnings', ['event_id' => $record->event_id])) {
+            return;
+        }
+
+        $payload = json_decode($record->payload, true);
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+
+        $earning = new \stdClass();
+        $earning->event_id = $record->event_id;
+        $earning->userid = $record->userid;
+        $earning->student_wallet = $record->student_wallet;
+        $earning->courseid = $record->courseid;
+        $earning->cmid = $record->cmid ?? null;
+        $earning->event_type = $record->event_type;
+        $earning->coins_earned = $coins;
+        $earning->coin_symbol = $payload['coin_symbol'] ?? 'MRT';
+        $earning->timecreated = time();
+
+        $DB->insert_record('local_meritcoin_earnings', $earning);
+
+        mtrace("MeritCoin: Earning recorded for event {$record->event_id} ({$coins} {$earning->coin_symbol}).");
     }
 }

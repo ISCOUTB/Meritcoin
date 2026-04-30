@@ -9,8 +9,6 @@ CAMBIOS v0.2.0:
 - EventRecord: nuevos campos activity_id, activity_name, coins_amount, coin_symbol
 """
 
-from datetime import datetime
-
 from sqlalchemy import Column, DateTime, Float, String, Text, func
 
 from app.core.database import Base
@@ -29,7 +27,7 @@ class EventRecord(Base):
     __tablename__ = "events"
 
     event_id        = Column(String(255), primary_key=True)
-    student_wallet  = Column(String(42),  nullable=False, index=True)
+    student_wallet  = Column(String(42),  nullable=True, index=True)
     student_id      = Column(String(255), nullable=False)
     course_id       = Column(String(255), nullable=False)
     course_name     = Column(String(500), default="")

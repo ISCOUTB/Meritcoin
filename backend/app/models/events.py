@@ -7,7 +7,7 @@ CAMBIOS v0.2.0:
 - StudentBadge / StudentBalance: sin cambios
 """
 
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Optional
 
@@ -31,7 +31,8 @@ class AcademicEvent(BaseModel):
       - coin_symbol:   Símbolo de la moneda del curso (ej: "MRT", "BIO", "MTH").
     """
     event_id:       str            = Field(...,    description="ID único del evento (idempotencia)")
-    student_wallet: str            = Field(...,    description="Dirección Ethereum del estudiante")
+    student_wallet: Optional[str]  = Field(None,   pattern=r"^0x[0-9a-fA-F]{40}$",
+                                                   description="Dirección Ethereum del estudiante; puede ser null mientras el evento espera wallet")
     student_id:     str            = Field(...,    description="ID del estudiante en Moodle (sin datos personales)")
     course_id:      str            = Field(...,    description="ID del curso en Moodle")
     course_name:    str            = Field("",     description="Nombre completo del curso")
@@ -42,7 +43,7 @@ class AcademicEvent(BaseModel):
     coins_amount:   Optional[float]= Field(None,   description="Monedas a emitir, calculadas en Moodle")
     coin_symbol:    Optional[str]  = Field("MRT",  description="Símbolo de la moneda del curso")
     coin_name:      Optional[str]  = Field("MeritCoin", description="Nombre completo de la moneda")
-    timestamp:      datetime       = Field(default_factory=datetime.utcnow)
+    timestamp:      datetime       = Field(default_factory=lambda: datetime.now(UTC))
 
     model_config = {"json_schema_extra": {
         "example": {

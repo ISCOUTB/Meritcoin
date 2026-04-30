@@ -5,7 +5,6 @@ Recibe eventos académicos desde el plugin de Moodle,
 valida el HMAC y dispara el flujo completo de procesamiento.
 """
 
-import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -32,18 +31,27 @@ async def ingest_event(
     body: bytes = Depends(verify_hmac),
     db: AsyncSession = Depends(get_db),
 ) -> EventResponse:
-    """
-    Flujo:
-    1. verify_hmac valida la firma del body
-    2. Parsea el JSON como AcademicEvent
-    3. Delega a events_service.process_event()
-    """
     try:
         event = AcademicEvent.model_validate_json(body)
     except ValidationError as e:
+        logger.warning("Payload inválido recibido en /events/ingest: %s", e.errors())
         raise HTTPException(status_code=422, detail=e.errors())
 
-    logger.info(f"Evento recibido: {event.event_id} tipo={event.event_type}")
+    logger.info(
+        "Evento recibido: id=%s type=%s wallet=%s course=%s activity=%s coins=%s",
+        event.event_id,
+        event.event_type,
+        event.student_wallet,
+        event.course_id,
+        getattr(event, "activity_id", None),
+        getattr(event, "coins_amount", None),
+    )
 
-    result = await events_service.process_event(db, event)
-    return result
+    try:
+        result = await events_service.process_event(db, event)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error procesando evento %s", event.event_id)
+        raise HTTPException(status_code=500, detail=f"Error processing event: {str(e)}")
