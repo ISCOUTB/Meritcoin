@@ -272,8 +272,10 @@ $transactions = [];
 if ($tab === 'transactions') {
     $userid = optional_param('userid', 0, PARAM_INT);
 
-    $where  = $courseid ? "AND q.courseid = :courseid" : "";
-    $where2 = $userid   ? "AND q.userid   = :userid"   : "";
+    $where_q   = $courseid ? "AND q.courseid  = :courseid" : "";
+    $where_q2  = $userid   ? "AND q.userid    = :userid"   : "";
+    $where_rd  = $courseid ? "AND rd.courseid = :courseid" : "";
+    $where_rd2 = $userid   ? "AND rd.userid   = :userid"   : "";
     $params = [];
     if ($courseid) $params['courseid'] = $courseid;
     if ($userid)   $params['userid']   = $userid;
@@ -293,7 +295,7 @@ if ($tab === 'transactions') {
            JOIN {user} u ON u.id = q.userid
            JOIN {course} c ON c.id = q.courseid
            JOIN {context} ctx ON ctx.instanceid = q.courseid AND ctx.contextlevel = 50
-          WHERE 1=1 {$where} {$where2}
+          WHERE 1=1 {$where_q} {$where_q2}
           ORDER BY q.timecreated DESC
           LIMIT 300",
         $params
@@ -316,7 +318,7 @@ if ($tab === 'transactions') {
            JOIN {user} u ON u.id = rd.userid
            JOIN {course} c ON c.id = rd.courseid
            JOIN {context} ctx ON ctx.instanceid = rd.courseid AND ctx.contextlevel = 50
-          WHERE 1=1 {$where} {$where2}
+          WHERE 1=1 {$where_rd} {$where_rd2}
           ORDER BY rd.timecreated DESC
           LIMIT 300",
         $params

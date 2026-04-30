@@ -44,4 +44,14 @@ if ($hassiteconfig) {
     ));
 
     $ADMIN->add('localplugins', $settings);
+
+    // ── Páginas de administración ──────────────────────────────────────────────
+    $ADMIN->add('localplugins',
+        new admin_externalpage(
+            'local_meritcoin_marketplace',
+            get_string('adminmarketplacetitle', 'local_meritcoin'),
+            new moodle_url('/local/meritcoin/admin_marketplace.php')
+        )
+    );
+
 }
