@@ -110,10 +110,16 @@ echo $OUTPUT->header();
       </h4>
       <small class="text-muted"><?= format_string($course->fullname) ?></small>
     </div>
-    <a href="<?= new moodle_url('/course/view.php', ['id' => $courseid]) ?>"
-       class="btn btn-sm btn-outline-secondary">
-      <i class="fa fa-arrow-left me-1"></i><?= get_string('backtocourse', 'local_meritcoin') ?>
-    </a>
+    <div class="d-flex gap-2">
+      <a href="<?= new moodle_url('/local/meritcoin/teacher_transactions.php', ['courseid' => $courseid]) ?>"
+         class="btn btn-sm btn-outline-primary">
+        <i class="fa fa-chart-bar me-1"></i><?= get_string('teacher_transactions_title', 'local_meritcoin') ?>
+      </a>
+      <a href="<?= new moodle_url('/course/view.php', ['id' => $courseid]) ?>"
+         class="btn btn-sm btn-outline-secondary">
+        <i class="fa fa-arrow-left me-1"></i><?= get_string('backtocourse', 'local_meritcoin') ?>
+      </a>
+    </div>
   </div>
 
   <!-- Formulario crear recompensa -->

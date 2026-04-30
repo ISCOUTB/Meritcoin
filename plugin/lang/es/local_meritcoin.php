@@ -214,3 +214,12 @@ $string['error_positive_grade']         = 'Debe ser 0 o mayor';
 
 $string['col_reevals']      = 'Reevals';
 $string['col_reevals_hint'] = 'Número de veces que esta actividad ha sido calificada';
+
+$string['teacher_transactions_title'] = 'Transacciones del curso';
+$string['teacher_tab_earnings']       = 'Monedas otorgadas';
+$string['teacher_kpi_awarded']        = 'Monedas otorgadas';
+$string['teacher_filter_student']     = 'Filtrar por estudiante';
+$string['teacher_all_students']       = 'Todos los estudiantes';
+$string['teacher_clear_filter']       = 'Limpiar filtro';
+$string['teacher_no_earnings']        = 'No hay monedas otorgadas aún en este curso.';
+$string['admin_tab_transactions']     = 'Todas las transacciones';

@@ -214,3 +214,12 @@ $string['error_positive_grade']         = 'Must be 0 or greater';
 
 $string['col_reevals']      = 'Reevals';
 $string['col_reevals_hint'] = 'Number of times this activity has been graded';
+
+$string['teacher_transactions_title'] = 'Course transactions';
+$string['teacher_tab_earnings']       = 'Coins awarded';
+$string['teacher_kpi_awarded']        = 'Coins awarded';
+$string['teacher_filter_student']     = 'Filter by student';
+$string['teacher_all_students']       = 'All students';
+$string['teacher_clear_filter']       = 'Clear filter';
+$string['teacher_no_earnings']        = 'No coins awarded yet in this course.';
+$string['admin_tab_transactions']     = 'All transactions';

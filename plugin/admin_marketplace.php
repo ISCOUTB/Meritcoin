@@ -159,6 +159,13 @@ echo $OUTPUT->header();
         <?php endif; ?>
       </a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link <?= $tab === 'transactions' ? 'active' : '' ?>"
+         href="<?= new moodle_url('/local/meritcoin/admin_marketplace.php',
+                    ['tab' => 'transactions', 'courseid' => $courseid]) ?>">
+        <i class="fa fa-list me-1"></i><?= get_string('admin_tab_transactions', 'local_meritcoin') ?>
+      </a>
+    </li>
   </ul>
 
   <!-- Tab: Recompensas -->
@@ -258,5 +265,202 @@ echo $OUTPUT->header();
   <?php endif; ?>
 
 </div>
+
+<?php
+// ── Tab: transacciones globales ───────────────────────────────────────────────
+$transactions = [];
+if ($tab === 'transactions') {
+    $userid = optional_param('userid', 0, PARAM_INT);
+
+    $where  = $courseid ? "AND q.courseid = :courseid" : "";
+    $where2 = $userid   ? "AND q.userid   = :userid"   : "";
+    $params = [];
+    if ($courseid) $params['courseid'] = $courseid;
+    if ($userid)   $params['userid']   = $userid;
+
+    // Monedas otorgadas
+    $earnings_all = $DB->get_records_sql(
+        "SELECT q.*, u.firstname, u.lastname,
+                c.fullname AS coursename,
+                (SELECT CONCAT(t.firstname,' ',t.lastname)
+                   FROM {role_assignments} ra
+                   JOIN {user} t ON t.id = ra.userid
+                   JOIN {role} ro ON ro.id = ra.roleid
+                  WHERE ra.contextid = ctx.id
+                    AND ro.shortname IN ('editingteacher','teacher')
+                  LIMIT 1) AS teachername
+           FROM {local_meritcoin_queue} q
+           JOIN {user} u ON u.id = q.userid
+           JOIN {course} c ON c.id = q.courseid
+           JOIN {context} ctx ON ctx.instanceid = q.courseid AND ctx.contextlevel = 50
+          WHERE 1=1 {$where} {$where2}
+          ORDER BY q.timecreated DESC
+          LIMIT 300",
+        $params
+    );
+
+    // Canjes
+    $redemptions_all = $DB->get_records_sql(
+        "SELECT rd.*, r.name AS reward_name, r.price_mrt,
+                u.firstname, u.lastname,
+                c.fullname AS coursename,
+                (SELECT CONCAT(t.firstname,' ',t.lastname)
+                   FROM {role_assignments} ra
+                   JOIN {user} t ON t.id = ra.userid
+                   JOIN {role} ro ON ro.id = ra.roleid
+                  WHERE ra.contextid = ctx.id
+                    AND ro.shortname IN ('editingteacher','teacher')
+                  LIMIT 1) AS teachername
+           FROM {local_meritcoin_redemptions} rd
+           JOIN {local_meritcoin_rewards} r ON r.id = rd.rewardid
+           JOIN {user} u ON u.id = rd.userid
+           JOIN {course} c ON c.id = rd.courseid
+           JOIN {context} ctx ON ctx.instanceid = rd.courseid AND ctx.contextlevel = 50
+          WHERE 1=1 {$where} {$where2}
+          ORDER BY rd.timecreated DESC
+          LIMIT 300",
+        $params
+    );
+
+    // Lista de estudiantes para filtro
+    $all_students = $DB->get_records_sql(
+        "SELECT DISTINCT u.id, u.firstname, u.lastname
+           FROM {local_meritcoin_queue} q
+           JOIN {user} u ON u.id = q.userid
+          ORDER BY u.lastname ASC"
+    );
+}
+?>
+
+<?php if ($tab === 'transactions'): ?>
+  <?php $userid = optional_param('userid', 0, PARAM_INT); ?>
+
+  <!-- Filtro por estudiante -->
+  <form method="get" class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <input type="hidden" name="tab" value="transactions">
+    <input type="hidden" name="courseid" value="<?= $courseid ?>">
+    <label class="form-label mb-0 fw-semibold text-nowrap">
+      <i class="fa fa-user me-1"></i><?= get_string('teacher_filter_student', 'local_meritcoin') ?>
+    </label>
+    <select name="userid" class="form-select form-select-sm" style="max-width:280px"
+            onchange="this.form.submit()">
+      <option value="0"><?= get_string('teacher_all_students', 'local_meritcoin') ?></option>
+      <?php foreach ($all_students as $s): ?>
+        <option value="<?= $s->id ?>" <?= $userid == $s->id ? 'selected' : '' ?>>
+          <?= s(fullname($s)) ?>
+        </option>
+      <?php endforeach; ?>
+    </select>
+  </form>
+
+  <!-- Sub-tabs: otorgadas / canjes -->
+  <ul class="nav nav-pills mb-3">
+    <li class="nav-item">
+      <a class="nav-link <?= !isset($_GET['subtab']) || $_GET['subtab']==='earnings' ? 'active' : '' ?>"
+         href="<?= new moodle_url('/local/meritcoin/admin_marketplace.php',
+                    ['tab'=>'transactions','courseid'=>$courseid,'userid'=>$userid,'subtab'=>'earnings']) ?>">
+        <i class="fa fa-star me-1"></i><?= get_string('teacher_tab_earnings', 'local_meritcoin') ?>
+        <span class="badge bg-light text-dark ms-1"><?= count($earnings_all) ?></span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link <?= (isset($_GET['subtab']) && $_GET['subtab']==='redemptions') ? 'active' : '' ?>"
+         href="<?= new moodle_url('/local/meritcoin/admin_marketplace.php',
+                    ['tab'=>'transactions','courseid'=>$courseid,'userid'=>$userid,'subtab'=>'redemptions']) ?>">
+        <i class="fa fa-shopping-cart me-1"></i><?= get_string('tabredemptions', 'local_meritcoin') ?>
+        <span class="badge bg-light text-dark ms-1"><?= count($redemptions_all) ?></span>
+      </a>
+    </li>
+  </ul>
+
+  <?php $subtab = optional_param('subtab', 'earnings', PARAM_ALPHA); ?>
+
+  <?php if ($subtab === 'earnings'): ?>
+  <div class="card">
+    <div class="card-body p-0">
+      <?php if (empty($earnings_all)): ?>
+        <div class="mrt-empty-state text-center py-5">
+          <p class="text-muted"><?= get_string('teacher_no_earnings', 'local_meritcoin') ?></p>
+        </div>
+      <?php else: ?>
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th><?= get_string('coldate', 'local_meritcoin') ?></th>
+                <th><?= get_string('admincolstudent', 'local_meritcoin') ?></th>
+                <th><?= get_string('colcourse', 'local_meritcoin') ?></th>
+                <th><?= get_string('adminteacher', 'local_meritcoin') ?></th>
+                <th><?= get_string('colactivity', 'local_meritcoin') ?></th>
+                <th><?= get_string('colgrade', 'local_meritcoin') ?></th>
+                <th class="text-end"><?= get_string('colcoins', 'local_meritcoin') ?></th>
+                <th><?= get_string('colstatus', 'local_meritcoin') ?></th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($earnings_all as $e): ?>
+                <tr>
+                  <td class="small text-nowrap"><?= userdate($e->timecreated, get_string('strftimedatetimeshort', 'langconfig')) ?></td>
+                  <td class="small"><?= s($e->firstname . ' ' . $e->lastname) ?></td>
+                  <td class="small"><?= s($e->coursename) ?></td>
+                  <td class="small text-muted"><?= s($e->teachername ?: '—') ?></td>
+                  <td class="small"><?= s($e->activity_name ?: '—') ?></td>
+                  <td><?= $e->grade !== null ? number_format((float)$e->grade, 1) : '—' ?></td>
+                  <td class="text-end fw-bold text-success">+<?= number_format((float)$e->coins_amount, 2) ?></td>
+                  <td><?= local_meritcoin_status_badge($e->status) ?></td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <?php if ($subtab === 'redemptions'): ?>
+  <div class="card">
+    <div class="card-body p-0">
+      <?php if (empty($redemptions_all)): ?>
+        <div class="mrt-empty-state text-center py-5">
+          <p class="text-muted"><?= get_string('adminredemptionsempty', 'local_meritcoin') ?></p>
+        </div>
+      <?php else: ?>
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th><?= get_string('coldate', 'local_meritcoin') ?></th>
+                <th><?= get_string('admincolstudent', 'local_meritcoin') ?></th>
+                <th><?= get_string('colcourse', 'local_meritcoin') ?></th>
+                <th><?= get_string('adminteacher', 'local_meritcoin') ?></th>
+                <th><?= get_string('rewardname', 'local_meritcoin') ?></th>
+                <th class="text-end"><?= get_string('admincoinsspent', 'local_meritcoin') ?></th>
+                <th><?= get_string('admintxhash', 'local_meritcoin') ?></th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($redemptions_all as $rd): ?>
+                <tr>
+                  <td class="small text-nowrap"><?= userdate($rd->timecreated, get_string('strftimedatetimeshort', 'langconfig')) ?></td>
+                  <td class="small"><?= s($rd->firstname . ' ' . $rd->lastname) ?></td>
+                  <td class="small"><?= s($rd->coursename) ?></td>
+                  <td class="small text-muted"><?= s($rd->teachername ?: '—') ?></td>
+                  <td class="fw-semibold"><?= s($rd->reward_name) ?></td>
+                  <td class="text-end fw-bold text-danger">-<?= number_format((float)$rd->coins_spent, 2) ?></td>
+                  <td class="small text-muted font-monospace">
+                    <?= $rd->tx_hash ? s(substr($rd->tx_hash, 0, 18) . '…') : '—' ?>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
+<?php endif; ?>
 
 <?php echo $OUTPUT->footer(); ?>
