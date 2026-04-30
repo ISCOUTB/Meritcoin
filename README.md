@@ -171,6 +171,7 @@ npx hardhat node
 ```bash
 cd contracts
 npx hardhat run scripts/deploy.js --network localhost
+# Copiar las direcciones de contratos mostradas
 ```
 
 Verás algo así — copia ambas direcciones:
