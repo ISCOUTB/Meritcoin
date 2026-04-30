@@ -1,18 +1,10 @@
 <?php
-// This file is part of Moodle - [http://moodle.org/](http://moodle.org/)
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 namespace local_meritcoin\form;
 
@@ -21,118 +13,119 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir . '/formslib.php');
 
 /**
- * Formulario para crear/editar reglas de emisión de monedas por curso o actividad.
+ * Formulario para crear/editar reglas de emisión de monedas.
  *
- * USO ESPERADO:
- * ─────────────────────────────────────────────────────────────────────────────
- * Este formulario será utilizado desde editrule.php.
+ * Soporta tres scopes:
+ *   - course        → aplica a todo el curso.
+ *   - activity_type → aplica a todos los módulos de un tipo (assign, forum, quiz…).
+ *   - activity      → aplica a una actividad específica (cmid).
  *
- * customdata esperada:
- *   - courseid (int)                Obligatorio.
- *   - rule (\stdClass|null)         Opcional, para edición.
- *   - defaultcoinsymbol (string)    Opcional, por defecto 'MRT'.
+ * Todos los scopes admiten un min_grade opcional.
  *
  * @package    local_meritcoin
  * @copyright  2026 Universidad Tecnológica de Bolívar
- * @license    [http://www.gnu.org/copyleft/gpl.html](http://www.gnu.org/copyleft/gpl.html) GNU GPL v3 or later
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class rule_form extends \moodleform {
 
-    /**
-     * Define la estructura del formulario.
-     */
     public function definition() {
-        $mform = $this->_form;
-
+        $mform    = $this->_form;
         $courseid = (int)($this->_customdata['courseid'] ?? 0);
-        $rule = $this->_customdata['rule'] ?? null;
+        $rule     = $this->_customdata['rule'] ?? null;
         $defaultcoinsymbol = $this->_customdata['defaultcoinsymbol'] ?? 'MRT';
 
-        // ── Datos internos ───────────────────────────────────────────────
+        // ── Campos ocultos ───────────────────────────────────────────────
         $mform->addElement('hidden', 'id', $rule->id ?? 0);
         $mform->setType('id', PARAM_INT);
 
         $mform->addElement('hidden', 'courseid', $courseid);
         $mform->setType('courseid', PARAM_INT);
 
-        // ── Encabezado ──────────────────────────────────────────────────
+        // ── Encabezado ───────────────────────────────────────────────────
         $mform->addElement('header', 'rulehdr', get_string('pluginname', 'local_meritcoin'));
 
-        // ── Tipo de regla ───────────────────────────────────────────────
+        // ── Tipo de regla ────────────────────────────────────────────────
         $scopeoptions = [
-            'course' => get_string('rule_scope_course', 'local_meritcoin'),
-            'activity' => get_string('rule_scope_activity', 'local_meritcoin'),
+            'course'        => get_string('rule_scope_course', 'local_meritcoin'),
+            'activity_type' => get_string('rule_scope_activity_type', 'local_meritcoin'),
+            'activity'      => get_string('rule_scope_activity', 'local_meritcoin'),
         ];
         $mform->addElement('select', 'rule_scope', get_string('rule_scope', 'local_meritcoin'), $scopeoptions);
         $mform->setType('rule_scope', PARAM_ALPHA);
 
-        // ── Actividad del curso ─────────────────────────────────────────
+        // ── Tipo de módulo (solo para activity_type) ─────────────────────
+        $modtypeoptions = $this->get_mod_type_options($courseid);
+        $mform->addElement('select', 'mod_type', get_string('rule_mod_type', 'local_meritcoin'), $modtypeoptions);
+        $mform->setType('mod_type', PARAM_ALPHANUMEXT);
+        $mform->hideIf('mod_type', 'rule_scope', 'neq', 'activity_type');
+
+        // ── Actividad específica (solo para activity) ─────────────────────
         $activityoptions = $this->get_course_module_options($courseid);
         $mform->addElement('select', 'cmid', get_string('activity'), $activityoptions);
         $mform->setType('cmid', PARAM_INT);
-        $mform->addHelpButton('cmid', 'activity', 'local_meritcoin');
-        $mform->hideIf('cmid', 'rule_scope', 'eq', 'course');
+        $mform->hideIf('cmid', 'rule_scope', 'neq', 'activity');
 
-        // ── Nombre visible de la actividad ──────────────────────────────
-        // Se deja editable como respaldo simple y para permitir ajustes de UI.
-        // En editrule.php también puedes recalcularlo automáticamente desde cmid.
+        // ── Nombre visible ────────────────────────────────────────────────
         $mform->addElement('text', 'activityname', get_string('activity_name', 'local_meritcoin'), ['size' => 48]);
         $mform->setType('activityname', PARAM_TEXT);
         $mform->hideIf('activityname', 'rule_scope', 'eq', 'course');
+        $mform->hideIf('activityname', 'rule_scope', 'eq', 'activity_type');
 
-        // ── Monedas a otorgar ────────────────────────────────────────────
+        // ── Monedas a otorgar ─────────────────────────────────────────────
         $mform->addElement('text', 'coins_amount', get_string('coins_amount', 'local_meritcoin'), ['size' => 10]);
         $mform->setType('coins_amount', PARAM_FLOAT);
         $mform->addRule('coins_amount', null, 'required', null, 'client');
 
-        // ── Símbolo de la moneda ────────────────────────────────────────
+        // ── Símbolo de la moneda ──────────────────────────────────────────
         $mform->addElement('text', 'coin_symbol', get_string('coin_symbol', 'local_meritcoin'), ['size' => 12]);
         $mform->setType('coin_symbol', PARAM_TEXT);
         $mform->addRule('coin_symbol', null, 'required', null, 'client');
 
-        // ── Estado de la regla ──────────────────────────────────────────
-        $mform->addElement(
-            'advcheckbox',
-            'enabled',
-            get_string('enabled', 'local_meritcoin'),
-            get_string('rule_enabled_desc', 'local_meritcoin')
-        );
+        // ── Nota mínima (opcional, todos los scopes) ──────────────────────
+        $mform->addElement('text', 'min_grade', get_string('rule_min_grade', 'local_meritcoin'), ['size' => 8, 'placeholder' => get_string('rule_min_grade_placeholder', 'local_meritcoin')]);
+        $mform->setType('min_grade', PARAM_RAW); // se valida manualmente para permitir vacío
+        $mform->addHelpButton('min_grade', 'rule_min_grade', 'local_meritcoin');
+
+        // ── Estado ────────────────────────────────────────────────────────
+        $mform->addElement('advcheckbox', 'enabled', get_string('enabled', 'local_meritcoin'), get_string('rule_enabled_desc', 'local_meritcoin'));
         $mform->setDefault('enabled', 1);
 
-        // ── Valores por defecto ─────────────────────────────────────────
+        // ── Valores por defecto ───────────────────────────────────────────
+        $mingradeval = '';
+        if ($rule !== null && $rule->min_grade !== null && $rule->min_grade !== '') {
+            $mingradeval = format_float((float)$rule->min_grade, 2, false);
+        }
+
         $defaults = [
-            'id' => $rule->id ?? 0,
-            'courseid' => $courseid,
-            'rule_scope' => $rule->rule_scope ?? 'activity',
-            'cmid' => $rule->cmid ?? 0,
+            'id'           => $rule->id ?? 0,
+            'courseid'     => $courseid,
+            'rule_scope'   => $rule->rule_scope ?? 'activity',
+            'mod_type'     => $rule->mod_type ?? '',
+            'cmid'         => $rule->cmid ?? 0,
             'activityname' => $rule->activityname ?? '',
             'coins_amount' => isset($rule->coins_amount) ? format_float((float)$rule->coins_amount, 2, false) : '1.00',
-            'coin_symbol' => $rule->coin_symbol ?? $defaultcoinsymbol,
-            'enabled' => isset($rule->enabled) ? (int)$rule->enabled : 1,
+            'coin_symbol'  => $rule->coin_symbol ?? $defaultcoinsymbol,
+            'min_grade'    => $mingradeval,
+            'enabled'      => isset($rule->enabled) ? (int)$rule->enabled : 1,
         ];
         $this->set_data($defaults);
 
-        // ── Botones ─────────────────────────────────────────────────────
+        // ── Botones ───────────────────────────────────────────────────────
         $this->add_action_buttons(true, get_string('savechanges'));
     }
 
-    /**
-     * Valida los datos del formulario.
-     *
-     * @param array $data
-     * @param array $files
-     * @return array
-     */
     public function validation($data, $files) {
         $errors = parent::validation($data, $files);
 
         $scope        = $data['rule_scope'] ?? '';
         $cmid         = isset($data['cmid']) ? (int)$data['cmid'] : 0;
+        $modtype      = trim($data['mod_type'] ?? '');
         $coinsamount  = isset($data['coins_amount']) ? (float)$data['coins_amount'] : 0;
         $coinsymbol   = trim($data['coin_symbol'] ?? '');
         $activityname = trim($data['activityname'] ?? '');
+        $mingrade     = trim($data['min_grade'] ?? '');
 
-        if (!in_array($scope, ['course', 'activity'])) {
+        if (!in_array($scope, ['course', 'activity_type', 'activity'])) {
             $errors['rule_scope'] = get_string('invaliddata', 'error');
         }
 
@@ -144,29 +137,65 @@ class rule_form extends \moodleform {
             $errors['activityname'] = get_string('required');
         }
 
+        if ($scope === 'activity_type' && $modtype === '') {
+            $errors['mod_type'] = get_string('required');
+        }
+
         if ($coinsamount <= 0) {
             $errors['coins_amount'] = get_string('error_positive_coins', 'local_meritcoin');
         }
 
         if ($coinsymbol === '') {
             $errors['coin_symbol'] = get_string('required');
-        } else if (\core_text::strlen($coinsymbol) > 20) {  // ← fix aquí
+        } else if (\core_text::strlen($coinsymbol) > 20) {
             $errors['coin_symbol'] = get_string('maxlengthwarning', '', 20);
+        }
+
+        if ($mingrade !== '') {
+            if (!is_numeric($mingrade)) {
+                $errors['min_grade'] = get_string('error_invalid_grade', 'local_meritcoin');
+            } else if ((float)$mingrade < 0) {
+                $errors['min_grade'] = get_string('error_positive_grade', 'local_meritcoin');
+            }
         }
 
         return $errors;
     }
 
     /**
+     * Construye opciones de tipos de módulo presentes en el curso.
+     */
+    private function get_mod_type_options(int $courseid): array {
+        global $DB;
+
+        $options = ['' => get_string('rule_select_mod_type', 'local_meritcoin')];
+
+        if ($courseid <= 0) {
+            return $options;
+        }
+
+        $sql = "SELECT DISTINCT m.name
+                  FROM {modules} m
+                  JOIN {course_modules} cm ON cm.module = m.id
+                 WHERE cm.course = :courseid
+                   AND cm.deletioninprogress = 0
+                 ORDER BY m.name ASC";
+
+        $mods = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+
+        foreach ($mods as $mod) {
+            $label = get_string('pluginname', 'mod_' . $mod->name);
+            $options[$mod->name] = $label;
+        }
+
+        return $options;
+    }
+
+    /**
      * Construye las opciones del selector de actividades del curso.
-     *
-     * @param int $courseid
-     * @return array
      */
     private function get_course_module_options(int $courseid): array {
-        $options = [
-            0 => get_string('selectactivity', 'local_meritcoin'),
-        ];
+        $options = [0 => get_string('selectactivity', 'local_meritcoin')];
 
         if ($courseid <= 0) {
             return $options;
@@ -175,21 +204,15 @@ class rule_form extends \moodleform {
         $modinfo = get_fast_modinfo($courseid);
 
         foreach ($modinfo->get_cms() as $cm) {
-            if (!$cm->uservisible) {
+            if (!$cm->uservisible || $cm->deletioninprogress) {
                 continue;
             }
-
-            if ($cm->deletioninprogress) {
-                continue;
-            }
-
             $label = '[' . $cm->modname . '] ' . $cm->name;
             $options[(int)$cm->id] = $label;
         }
 
         asort($options);
 
-        // Mantener la primera opción al inicio.
         $first = [0 => get_string('selectactivity', 'local_meritcoin')];
         unset($options[0]);
 

@@ -259,5 +259,29 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026042804, 'local', 'meritcoin');
     }
 
+    if ($oldversion < 2026043001) {
+        $table = new xmldb_table('local_meritcoin_rules');
+
+        // Agregar mod_type
+        $field = new xmldb_field('mod_type', XMLDB_TYPE_CHAR, '50', null, null, null, null, 'rule_scope');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Agregar min_grade
+        $field = new xmldb_field('min_grade', XMLDB_TYPE_NUMBER, '10', null, null, null, null, 'coin_symbol');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Nuevo índice para búsqueda por mod_type
+        $index = new xmldb_index('rules_course_modtype_idx', XMLDB_INDEX_NOTUNIQUE, ['courseid', 'mod_type', 'rule_scope']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        upgrade_plugin_savepoint(true, 2026043001, 'local', 'meritcoin');
+    }
+
     return true;
 }

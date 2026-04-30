@@ -106,22 +106,28 @@ if ($form->is_cancelled()) {
 // ── Guardar ───────────────────────────────────────────────────────────────────
 if ($formdata = $form->get_data()) {
 
-    $scope       = clean_param($formdata->rule_scope, PARAM_ALPHA);
-    $cmid        = (int)$formdata->cmid;
-    $coinsamount = round((float)$formdata->coins_amount, 2);
-    $coinsymbol  = clean_param($formdata->coin_symbol, PARAM_TEXT);
-    $enabled     = (int)$formdata->enabled;
-    $now         = time();
-
+    $scope        = clean_param($formdata->rule_scope, PARAM_ALPHA);
+    $cmid         = (int)($formdata->cmid ?? 0);
+    $modtype      = clean_param($formdata->mod_type ?? '', PARAM_ALPHANUMEXT);
+    $coinsamount  = round((float)$formdata->coins_amount, 2);
+    $coinsymbol   = clean_param($formdata->coin_symbol, PARAM_TEXT);
+    $enabled      = (int)$formdata->enabled;
+    $mingraderaw  = trim($formdata->min_grade ?? '');
+    $mingrade     = ($mingraderaw !== '' && is_numeric($mingraderaw)) ? (float)$mingraderaw : null;
+    $now          = time();
     $activityname = '';
 
     if ($scope === 'activity' && $cmid > 0) {
         $modinfo      = get_fast_modinfo($courseid);
         $cm           = $modinfo->get_cm($cmid);
         $activityname = $cm->name;
+    } else if ($scope === 'activity_type' && $modtype !== '') {
+        $activityname = get_string('pluginname', 'mod_' . $modtype);
+        $cmid         = null;
     } else {
         $scope        = 'course';
         $cmid         = null;
+        $modtype      = null;
         $activityname = 'Regla general del curso';
     }
 
@@ -130,9 +136,11 @@ if ($formdata = $form->get_data()) {
         $record->id           = $ruleid;
         $record->rule_scope   = $scope;
         $record->cmid         = ($scope === 'activity') ? $cmid : null;
+        $record->mod_type     = ($scope === 'activity_type') ? $modtype : null;
         $record->activityname = $activityname;
         $record->coins_amount = $coinsamount;
         $record->coin_symbol  = $coinsymbol;
+        $record->min_grade    = $mingrade;
         $record->enabled      = $enabled;
         $record->timemodified = $now;
 
@@ -140,39 +148,49 @@ if ($formdata = $form->get_data()) {
         \core\notification::success(get_string('rule_updated', 'local_meritcoin'));
 
     } else {
-        $existingparams = ['courseid' => $courseid, 'rule_scope' => $scope];
-
+        // Buscar regla duplicada según scope
         if ($scope === 'activity') {
-            $existingparams['cmid'] = $cmid;
-        }
-
-        $existing = ($scope === 'activity')
-            ? $DB->get_record('local_meritcoin_rules', $existingparams)
-            : $DB->get_record_sql(
+            $existing = $DB->get_record('local_meritcoin_rules', [
+                'courseid'   => $courseid,
+                'rule_scope' => 'activity',
+                'cmid'       => $cmid,
+            ]);
+        } else if ($scope === 'activity_type') {
+            $existing = $DB->get_record('local_meritcoin_rules', [
+                'courseid'   => $courseid,
+                'rule_scope' => 'activity_type',
+                'mod_type'   => $modtype,
+            ]);
+        } else {
+            $existing = $DB->get_record_sql(
                 "SELECT * FROM {local_meritcoin_rules}
                   WHERE courseid = :courseid
                     AND cmid IS NULL
-                    AND rule_scope = :rule_scope",
-                $existingparams
+                    AND rule_scope = 'course'",
+                ['courseid' => $courseid]
             );
+        }
 
         if ($existing) {
             $existing->activityname = $activityname;
             $existing->coins_amount = $coinsamount;
             $existing->coin_symbol  = $coinsymbol;
+            $existing->min_grade    = $mingrade;
+            $existing->mod_type     = ($scope === 'activity_type') ? $modtype : null;
             $existing->enabled      = $enabled;
             $existing->timemodified = $now;
             $DB->update_record('local_meritcoin_rules', $existing);
             \core\notification::warning(get_string('rule_duplicate_updated', 'local_meritcoin'));
-
         } else {
             $record               = new stdClass();
             $record->courseid     = $courseid;
             $record->rule_scope   = $scope;
             $record->cmid         = ($scope === 'activity') ? $cmid : null;
+            $record->mod_type     = ($scope === 'activity_type') ? $modtype : null;
             $record->activityname = $activityname;
             $record->coins_amount = $coinsamount;
             $record->coin_symbol  = $coinsymbol;
+            $record->min_grade    = $mingrade;
             $record->enabled      = $enabled;
             $record->timecreated  = $now;
             $record->timemodified = $now;

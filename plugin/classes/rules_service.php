@@ -44,32 +44,48 @@ defined('MOODLE_INTERNAL') || die();
 class rules_service {
 
     /**
-     * Busca la regla aplicable a una actividad concreta dentro de un curso.
-     *
-     * Prioridad:
-     *   1. Regla específica courseid + cmid + scope=activity.
-     *   2. Regla general del curso con cmid NULL y scope=course.
-     *
-     * @param int $courseid ID del curso.
-     * @param int|null $cmid ID del course module; null si se busca regla general.
-     * @return \stdClass|null
-     */
-    public static function get_activity_rule(int $courseid, ?int $cmid): ?\stdClass {
+    * Busca la regla aplicable a una actividad concreta dentro de un curso.
+    *
+    * Prioridad:
+    *   1. Regla específica courseid + cmid + scope=activity.
+    *   2. Regla por tipo de módulo courseid + mod_type + scope=activity_type.
+    *   3. Regla general del curso con cmid NULL y scope=course.
+    *
+    * @param int      $courseid ID del curso.
+    * @param int|null $cmid     ID del course module; null si se busca regla general.
+    * @param string|null $modtype Tipo de módulo (assign, forum, quiz, etc.).
+    * @return \stdClass|null
+    */
+    public static function get_activity_rule(int $courseid, ?int $cmid, ?string $modtype = null): ?\stdClass {
         global $DB;
 
+        // 1. Regla específica de actividad (máxima prioridad)
         if (!empty($cmid)) {
             $rule = $DB->get_record('local_meritcoin_rules', [
-                'courseid' => $courseid,
-                'cmid' => $cmid,
+                'courseid'   => $courseid,
+                'cmid'       => $cmid,
                 'rule_scope' => 'activity',
-                'enabled' => 1,
+                'enabled'    => 1,
             ]);
-
             if ($rule) {
                 return $rule;
             }
         }
 
+        // 2. Regla por tipo de módulo
+        if (!empty($modtype)) {
+            $rule = $DB->get_record('local_meritcoin_rules', [
+                'courseid'   => $courseid,
+                'rule_scope' => 'activity_type',
+                'mod_type'   => $modtype,
+                'enabled'    => 1,
+            ]);
+            if ($rule) {
+                return $rule;
+            }
+        }
+
+        // 3. Regla general del curso (menor prioridad)
         $sql = "SELECT *
                   FROM {local_meritcoin_rules}
                  WHERE courseid = :courseid
@@ -79,31 +95,49 @@ class rules_service {
 
         return $DB->get_record_sql($sql, [
             'courseid' => $courseid,
-            'scope' => 'course',
+            'scope'    => 'course',
         ]) ?: null;
     }
 
     /**
      * Resuelve cuántas monedas deben emitirse para un evento.
      *
-     * Reglas actuales:
-     *   - completion → 0 monedas por defecto.
-     *   - grade → usa coins_amount de la regla aplicable.
-     *   - sin regla activa → 0.
+     * Aplica la lógica de min_grade: si la regla tiene nota mínima y la nota
+     * del estudiante no la alcanza, devuelve 0 sin encolar el evento.
      *
-     * @param int $courseid ID del curso.
-     * @param int|null $cmid ID del course module.
-     * @param string $eventtype completion o grade.
+     * @param int         $courseid  ID del curso.
+     * @param int|null    $cmid      ID del course module.
+     * @param string      $eventtype completion o grade.
+     * @param string|null $modtype   Tipo de módulo (assign, forum, quiz...).
+     * @param float|null  $grade     Calificación obtenida por el estudiante.
      * @return float
      */
-    public static function get_coins_for_event(int $courseid, ?int $cmid, string $eventtype): float {
+    public static function get_coins_for_event(
+        int $courseid,
+        ?int $cmid,
+        string $eventtype,
+        ?string $modtype = null,
+        ?float $grade = null
+    ): float {
         if ($eventtype === 'completion') {
             return 0.0;
         }
 
-        $rule = self::get_activity_rule($courseid, $cmid);
+        $rule = self::get_activity_rule($courseid, $cmid, $modtype);
         if (!$rule) {
             return 0.0;
+        }
+
+        // Validar nota mínima si la regla la tiene configurada
+        if ($rule->min_grade !== null && $grade !== null) {
+            if ($grade < (float)$rule->min_grade) {
+                debugging(
+                    "MeritCoin: Nota {$grade} no alcanza el mínimo {$rule->min_grade} " .
+                    "para curso {$courseid}, cmid " . ($cmid ?? 'null') . ".",
+                    DEBUG_DEVELOPER
+                );
+                return 0.0;
+            }
         }
 
         return round((float)$rule->coins_amount, 2);
