@@ -89,7 +89,7 @@ meritcoin/
 │   ├── test_e2e.py               # 8 pruebas E2E automatizadas
 │   ├── test_curl.py              # Generador de comandos curl
 │   └── GUIA_FASE5.md
-├── docker-compose.yml            # Moodle + MariaDB + PostgreSQL
+├── docker-compose.yml            # Moodle + MariaDB + PostgreSQL + Hardhat
 ├── .env.example
 └── README.md
 ```
@@ -151,7 +151,7 @@ Primera vez tarda ~3 minutos (instalación de Moodle).
 - Moodle: http://localhost:8080 (admin / Admin1234!)
 - PostgreSQL: puerto 5432
 
-### 3. Instalar y probar contratos
+### 3. Instalar dependencias de contratos
 
 ```bash
 cd contracts
@@ -159,71 +159,216 @@ npm install
 npx hardhat test          # 19/19 tests
 ```
 
-### 4. Levantar nodo Hardhat y desplegar
+### 4. Levantar nodo Hardhat y desplegar contratos
 
-**Terminal 1:**
+**Terminal 1** — deja esta terminal abierta todo el tiempo:
 ```bash
 cd contracts
-npx hardhat node --hostname 0.0.0.0
+npx hardhat node
 ```
 
 **Terminal 2:**
 ```bash
 cd contracts
 npx hardhat run scripts/deploy.js --network localhost
-# Copiar las direcciones de contratos mostradas
+```
+
+Verás algo así — copia ambas direcciones:
+```
+MeritCoin ERC20 deployed to:    0x8A791620dd6260079BF849Dc5567aDC3F2FdC318
+MeritBadge ERC1155 deployed to: 0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6
 ```
 
 ### 5. Configurar variables de entorno
 
-Editar el `.env` en la raíz del proyecto:
+Editar `backend/.env` con las direcciones del paso anterior:
 ```env
-DATABASE_URL=postgresql+asyncpg://meritcoin:meritcoin_pass@localhost:5432/meritcoin_db
+DATABASE_URL=postgresql+asyncpg://meritcoin:meritcoin_pass@meritcoin-postgres:5432/meritcoin_db
 HMAC_SECRET=cambia-este-secreto-en-produccion
 BLOCKCHAIN_RPC_URL=http://host.docker.internal:8545
 DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-BADGE_CONTRACT_ADDRESS=<direccion del paso 4>
-MRT_CONTRACT_ADDRESS=<direccion del paso 4>
+MRT_CONTRACT_ADDRESS=0x8A791620dd6260079BF849Dc5567aDC3F2FdC318
+BADGE_CONTRACT_ADDRESS=0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6
 DEBUG=true
 ```
 
-> ⚠️ El backend corre dentro de Docker. Usar `host.docker.internal` (no `127.0.0.1`) para apuntar a servicios en tu máquina local como el nodo Hardhat.
+> ⚠️ El backend corre dentro de Docker. Usar `host.docker.internal` (no `127.0.0.1`) para apuntar al nodo Hardhat que corre en tu máquina local.
 
-### 6. Levantar el backend
+### 6. Recrear el backend con las nuevas variables
+
+Un simple `restart` no toma los cambios del `.env`. Hay que recrear el contenedor:
 
 ```bash
-docker compose up -d
-# O si ya está corriendo, reiniciar para tomar el .env actualizado:
-docker compose restart backend
+docker compose up -d --force-recreate backend
 ```
 
-Verificar que el backend esté sano:
+Verificar que el backend está conectado al nodo Hardhat:
 ```bash
 curl http://localhost:8000/health
 # Debe mostrar: "blockchain_connected": true
 ```
 
-### 7. Configurar plugin en Moodle
+---
 
-1. Moodle detecta el plugin automáticamente al reiniciar
-2. Ir a: **Administración del sitio → Plugins → Plugins locales → MeritCoin**
-3. Configurar:
-   - URL Backend: `http://host.docker.internal:8000`
-   - Secreto HMAC: el mismo valor de `HMAC_SECRET`
-   - Campo wallet: `wallet`
-4. Crear campo de perfil de usuario (tipo texto, nombre corto: `wallet`)
+## Tutorial de pruebas completo (end-to-end desde Moodle)
 
-### 8. Configurar reglas por curso
+Este tutorial explica cómo probar el flujo completo del sistema desde Moodle hasta
+ver los tokens reflejados en el dashboard y el mercado de recompensas.
 
-1. Ir a cualquier curso → menú lateral → **Gestión de reglas MeritCoin**
-2. Crear una regla por actividad o para el curso completo
-3. El observer usará esa regla para calcular automáticamente las monedas al capturar el evento
-
-### 9. Ejecutar tests E2E
+### Paso 1 — Verificar que todos los servicios están corriendo
 
 ```bash
-python scripts/test_e2e.py
-# Resultado esperado: 8/8 pruebas pasaron
+docker compose ps
+```
+
+Deben aparecer como `running`: `meritcoin-moodle`, `meritcoin-mariadb`, `meritcoin-postgres`, `meritcoin-backend`.
+
+Verificar que el nodo Hardhat está activo:
+```bash
+curl http://localhost:8545 -X POST -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+# Debe responder con: {"result":"0x8"} (o cualquier número de bloque)
+```
+
+Si el nodo no responde, levántalo en una terminal separada:
+```bash
+cd contracts
+npx hardhat node
+```
+
+Y vuelve a deployar los contratos y actualizar `backend/.env` con las nuevas direcciones (ver pasos 4 y 5).
+
+### Paso 2 — Instalar el plugin en Moodle
+
+1. Asegúrate de que esta línea en `docker-compose.yml` **no tenga `#`**:
+   ```yaml
+   - ./plugin:/bitnami/moodle/local/meritcoin
+   ```
+2. Recrea el contenedor de Moodle:
+   ```bash
+   docker compose up -d --force-recreate moodle
+   ```
+3. Verifica que el plugin está montado:
+   ```bash
+   docker exec meritcoin-moodle ls /bitnami/moodle/local/meritcoin
+   # Debe listar: version.php, lib.php, dashboard.php, etc.
+   ```
+4. Entra a Moodle como administrador: http://localhost:8080 (admin / Admin1234!)
+5. Ve a **Administración del sitio → Notificaciones** — Moodle detectará el plugin y pedirá actualizar la base de datos. Haz clic en **Continuar**.
+
+### Paso 3 — Configurar el plugin
+
+1. Ve a **Administración del sitio → Plugins → Plugins locales → MeritCoin**
+2. Configura:
+   - **URL Backend**: `http://meritcoin-backend:8000`
+   - **Secreto HMAC**: el mismo valor de `HMAC_SECRET` en `backend/.env`
+3. Guarda los cambios.
+
+### Paso 4 — Crear el campo de wallet en el perfil de usuario
+
+Este campo permite asignar una wallet de Hardhat a cada estudiante.
+
+1. Ve a **Administración del sitio → Usuarios → Campos de perfil de usuario**
+2. Crea un campo de tipo **Texto**:
+   - Nombre corto: `wallet`
+   - Nombre: `Wallet Ethereum`
+3. Guarda.
+
+### Paso 5 — Crear un estudiante de prueba con wallet real
+
+Hardhat genera 20 wallets predeterminadas con 10,000 ETH cada una. Usa la primera:
+
+```
+Dirección:     0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+Clave privada: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+```
+
+1. Ve a **Administración del sitio → Usuarios → Agregar usuario**
+2. Crea un usuario (ej. `estudiante1` / `Estudiante1234!`)
+3. En el perfil del usuario, busca el campo **Wallet Ethereum** y pega la dirección anterior
+4. Guarda.
+
+> ⚠️ **Importante**: si usas una wallet inventada (ej. `0x1234...`), los tokens se mintearán
+> a una dirección que no existe en el nodo Hardhat y el balance siempre será 0.
+
+### Paso 6 — Crear un curso y configurar una regla de recompensa
+
+1. Crea un curso en Moodle (ej. "Matemáticas") y matricula al estudiante de prueba
+2. Agrega al menos una actividad con **finalización de actividad** habilitada
+3. En el menú lateral del curso ve a **MeritCoin → Gestión de reglas**
+4. Crea una regla:
+   - Tipo: **Por calificación** o **Por completar actividad**
+   - Actividad: selecciona la que creaste
+   - Monedas: ej. `10`
+5. Guarda la regla.
+
+### Paso 7 — Generar un evento desde Moodle
+
+1. Entra a Moodle como el estudiante de prueba
+2. Completa la actividad del curso (entrega la tarea, completa el quiz, etc.)
+3. Verifica que el evento fue encolado:
+   ```bash
+   docker exec meritcoin-mariadb mysql -u bn_moodle -pmoodle_pass bitnami_moodle \
+     -e "SELECT userid, status, coins_amount FROM mdl_local_meritcoin_queue ORDER BY id DESC LIMIT 3;"
+   ```
+
+### Paso 8 — Procesar la cola (enviar al backend)
+
+La tarea programada se ejecuta automáticamente cada minuto. Para forzarla manualmente:
+
+```bash
+docker exec meritcoin-moodle php /bitnami/moodle/admin/cli/scheduled_task.php \
+  --execute=\\local_meritcoin\\task\\send_events_task
+```
+
+Verifica que el evento llegó al backend y se mintearon los tokens:
+```bash
+docker exec meritcoin-postgres psql -U meritcoin -d meritcoin_db \
+  -c "SELECT student_wallet, coins_amount, processed_at FROM events ORDER BY processed_at DESC LIMIT 5;"
+```
+
+### Paso 9 — Verificar el balance en el dashboard
+
+Desde la API:
+```bash
+curl -s http://localhost:8000/students/0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266/summary
+# Debe mostrar mrt_balance > 0 y la insignia ganada
+```
+
+Desde Moodle: entra como el estudiante y ve a **MeritCoin → Mi Dashboard**.
+Debe mostrar el balance real del contrato y el badge ganado.
+
+### Paso 10 — Probar el mercado de recompensas
+
+1. Como profesor/admin, ve al curso → **MeritCoin → Recompensas**
+2. Crea una recompensa con un precio en MRT menor o igual al balance del estudiante
+3. Entra como el estudiante al curso → **MeritCoin → Mercado**
+4. El estudiante solo podrá canjear recompensas con las monedas ganadas **en ese mismo curso**
+
+---
+
+### Limpiar datos para repetir pruebas desde cero
+
+**Limpiar BD del backend (PostgreSQL):**
+```bash
+docker exec meritcoin-postgres psql -U meritcoin -d meritcoin_db \
+  -c "TRUNCATE TABLE audit_log, events RESTART IDENTITY CASCADE;"
+```
+
+**Limpiar cola y canjes en Moodle (MariaDB):**
+```bash
+docker exec meritcoin-mariadb mysql -u bn_moodle -pmoodle_pass bitnami_moodle -e \
+  "DELETE FROM mdl_local_meritcoin_queue; DELETE FROM mdl_local_meritcoin_redemptions;"
+```
+
+**Reiniciar el nodo Hardhat (limpia el estado del contrato):**
+```bash
+# Ctrl+C en la terminal del nodo, luego:
+cd contracts && npx hardhat node
+# En otra terminal:
+cd contracts && npx hardhat run scripts/deploy.js --network localhost
+# Actualizar las nuevas direcciones en backend/.env y recrear el backend:
+docker compose up -d --force-recreate backend
 ```
 
 ---
@@ -313,8 +458,8 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 | 5 | Prueba de flujo completo (E2E) | ✅ Completa |
 | 6 | Gestión de reglas por curso (manage.php, editrule.php, rules_service) | ✅ Completa |
 | 7 | Ledger de ganancias y gasto por curso (earnings, spend) | ✅ Completa |
-| 8 | Dashboard del estudiante por curso | 🔄 En progreso |
-| 9 | Mercado de recompensas (canje de monedas) | 📋 Pendiente |
+| 8 | Dashboard del estudiante + Mercado de recompensas | ✅ Completa |
+| 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | 🔄 En progreso |
 | 10 | Despliegue en SAVIO + ajuste visual al tema de la universidad | 📋 Pendiente |
 
 ---
