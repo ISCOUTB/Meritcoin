@@ -55,9 +55,10 @@ $events = $DB->get_records_sql(
     "SELECT q.*,
             (SELECT COUNT(*)
                FROM {local_meritcoin_queue} q2
-              WHERE q2.userid  = q.userid
-                AND q2.cmid    = q.cmid
-                AND q2.cmid   IS NOT NULL) AS reeval_count
+              WHERE q2.userid      = q.userid
+                AND q2.cmid        = q.cmid
+                AND q2.cmid       IS NOT NULL
+                AND q2.timecreated <= q.timecreated) AS reeval_count
        FROM {local_meritcoin_queue} q
       WHERE q.userid = :userid
       ORDER BY q.timecreated DESC
@@ -134,48 +135,6 @@ echo $OUTPUT->header();
         <?php else: ?>
           <span class="badge bg-secondary"><?= get_string('no_wallet', 'local_meritcoin') ?></span>
         <?php endif; ?>
-      </div>
-    </div>
-  </div>
-
-  <!-- ESTADÍSTICAS -->
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-      <div class="mrt-stat-card card h-100">
-        <div class="card-body text-center">
-          <div class="mrt-stat-icon text-success"><i class="fa fa-graduation-cap fa-2x"></i></div>
-          <div class="mrt-stat-number"><?= $stats['completions'] ?></div>
-          <div class="mrt-stat-label"><?= get_string('statcompletions', 'local_meritcoin') ?></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="mrt-stat-card card h-100">
-        <div class="card-body text-center">
-          <div class="mrt-stat-icon text-warning"><i class="fa fa-star fa-2x"></i></div>
-          <div class="mrt-stat-number"><?= $stats['avg_grade'] !== null ? $stats['avg_grade'] : '--' ?></div>
-          <div class="mrt-stat-label"><?= get_string('statavggrade', 'local_meritcoin') ?></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="mrt-stat-card card h-100">
-        <div class="card-body text-center">
-          <div class="mrt-stat-icon text-primary"><i class="fa fa-paper-plane fa-2x"></i></div>
-          <div class="mrt-stat-number"><?= $stats['sent_events'] ?></div>
-          <div class="mrt-stat-label"><?= get_string('statsent', 'local_meritcoin') ?></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="mrt-stat-card card h-100">
-        <div class="card-body text-center">
-          <div class="mrt-stat-icon <?= $stats['failed_events'] > 0 ? 'text-danger' : 'text-secondary' ?>">
-            <i class="fa fa-<?= $stats['failed_events'] > 0 ? 'exclamation-circle' : 'check-circle' ?> fa-2x"></i>
-          </div>
-          <div class="mrt-stat-number"><?= $stats['pending_events'] ?></div>
-          <div class="mrt-stat-label"><?= get_string('statpending', 'local_meritcoin') ?></div>
-        </div>
       </div>
     </div>
   </div>
