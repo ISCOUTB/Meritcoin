@@ -170,14 +170,6 @@ $string['rewarddeleted']        = 'Reward deleted.';
 $string['rewardinvaliddata']    = 'Invalid data. Please check the name and price.';
 $string['rewardhasredemptions'] = 'Cannot delete: students have already redeemed this reward.';
 $string['backtocourse']         = 'Back to course';
-$string['rule_scope_activity_type']     = 'Activity type';
-$string['rule_mod_type']                = 'Module type';
-$string['rule_select_mod_type']         = '-- Select type --';
-$string['rule_min_grade']               = 'Minimum grade';
-$string['rule_min_grade_placeholder']   = 'Leave empty for no minimum';
-$string['rule_min_grade_help']          = 'If set, coins are only awarded when the student reaches this grade. Leave empty to always award coins.';
-$string['error_invalid_grade']          = 'Must be a number';
-$string['error_positive_grade']         = 'Must be 0 or greater';
 
 // ── Marketplace: student view ─────────────────────────────────────────────────
 $string['marketplacetitle']          = 'Rewards Marketplace';
@@ -210,3 +202,12 @@ $string['allcourses']             = 'All courses';
 $string['adminrewardsempty']      = 'No rewards have been created yet.';
 $string['adminredemptionsempty']  = 'No redemptions recorded yet.';
 $string['pluginsettings']         = 'Plugin settings';
+
+$string['rule_scope_activity_type']     = 'Activity type';
+$string['rule_mod_type']                = 'Module type';
+$string['rule_select_mod_type']         = '-- Select type --';
+$string['rule_min_grade']               = 'Minimum grade';
+$string['rule_min_grade_placeholder']   = 'Leave empty for no minimum';
+$string['rule_min_grade_help']          = 'If set, coins are only awarded when the student reaches this grade. Leave empty to always award coins.';
+$string['error_invalid_grade']          = 'Must be a number';
+$string['error_positive_grade']         = 'Must be 0 or greater';
