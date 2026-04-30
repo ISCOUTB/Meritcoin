@@ -62,8 +62,8 @@ class observer {
             return;
         }
 
-        // Solo procesar actividades y calificación final del curso.
-        if (!in_array($gradeitem->itemtype, ['mod', 'course'])) {
+        // Solo actividades reales
+        if ($gradeitem->itemtype !== 'mod') {
             return;
         }
 
@@ -182,8 +182,10 @@ class observer {
 
         // ── 6. Generar event_id único ────────────────────────────────────────
         $now    = time();
-        $cmpart = $cmid ?? 'course';
-        $eventid = uniqid("evt-moodle-{$userid}-{$courseid}-{$cmpart}-{$type}-", true);
+        // ✅ Determinístico: mismo userid + cmid + grade = mismo event_id
+        $cmpart  = $cmid ?? 'course';
+        $gradepart = $grade !== null ? number_format($grade, 5, '.', '') : 'null';
+        $eventid = 'evt-' . md5("moodle-{$userid}-{$courseid}-{$cmpart}-{$type}-{$gradepart}");
 
         if ($DB->record_exists('local_meritcoin_queue', ['event_id' => $eventid])) {
             return;

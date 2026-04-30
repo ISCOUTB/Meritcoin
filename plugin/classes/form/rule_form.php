@@ -51,7 +51,7 @@ class rule_form extends \moodleform {
             'activity'      => get_string('rule_scope_activity', 'local_meritcoin'),
         ];
         $mform->addElement('select', 'rule_scope', get_string('rule_scope', 'local_meritcoin'), $scopeoptions);
-        $mform->setType('rule_scope', PARAM_ALPHA);
+        $mform->setType('rule_scope', PARAM_ALPHANUMEXT);
 
         // ── Tipo de módulo (solo para activity_type) ─────────────────────
         $modtypeoptions = $this->get_mod_type_options($courseid);
