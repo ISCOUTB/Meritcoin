@@ -281,16 +281,16 @@ function local_meritcoin_get_backend_student_data(int $userid, ?string $wallet):
     }
 
     try {
-        $curl = new curl();
-        $curl->setopt([
-            'CURLOPT_TIMEOUT'        => 5,
-            'CURLOPT_CONNECTTIMEOUT' => 3,
-            'CURLOPT_RETURNTRANSFER' => true
+        $url     = rtrim($backendurl, '/') . '/students/' . urlencode($wallet) . '/summary';
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 5,
+                'method'  => 'GET',
+            ]
         ]);
 
-        $url      = rtrim($backendurl, '/') . '/students/' . urlencode($wallet) . '/summary';
-        $response = $curl->get($url);
-        $errno    = $curl->get_errno();
+        $response = @file_get_contents($url, false, $context);
+        $errno    = ($response === false) ? 1 : 0;
 
         if ($errno === 0 && !empty($response)) {
             $data = json_decode($response, true);
