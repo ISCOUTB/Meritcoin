@@ -20,7 +20,7 @@ class send_events extends \core\task\scheduled_task {
             return;
         }
 
-        $backendurl = get_config('local_meritcoin', 'backendurl');
+        $backendurl = get_config('local_meritcoin', 'api_url');
         if (empty($backendurl)) {
             mtrace('[MeritCoin] Backend URL no configurada. Tarea omitida.');
             return;
@@ -93,10 +93,10 @@ class send_events extends \core\task\scheduled_task {
                 'Accept: application/json',
             ];
 
-            // Agregar API key si está configurada
-            $apikey = get_config('local_meritcoin', 'apikey');
-            if (!empty($apikey)) {
-                $headers[] = 'X-API-Key: ' . $apikey;
+            $hmac_secret = get_config('local_meritcoin', 'hmac_secret');
+            if (!empty($hmac_secret)) {
+                $body_hash = hash_hmac('sha256', $event->payload, $hmac_secret);
+                $headers[] = 'X-HMAC-Signature: ' . $body_hash;
             }
 
             $curl->setHeader($headers);
