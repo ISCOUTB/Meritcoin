@@ -170,6 +170,14 @@ $string['rewarddeleted']        = 'Recompensa eliminada.';
 $string['rewardinvaliddata']    = 'Datos inválidos. Verifica el nombre y el precio.';
 $string['rewardhasredemptions'] = 'No se puede eliminar: ya hay estudiantes que canjearon esta recompensa.';
 $string['backtocourse']         = 'Volver al curso';
+$string['rule_scope_activity_type']     = 'Tipo de actividad (todos los entregables, todos los foros, etc.)';
+$string['rule_mod_type']                = 'Tipo de módulo';
+$string['rule_select_mod_type']         = '— Selecciona un tipo —';
+$string['rule_min_grade']               = 'Nota mínima';
+$string['rule_min_grade_placeholder']   = 'Dejar vacío para no exigir nota mínima';
+$string['rule_min_grade_help']          = 'Si se configura, solo se otorgan monedas cuando el estudiante alcanza o supera esta nota. Dejar vacío para otorgar monedas sin importar la calificación.';
+$string['error_invalid_grade']          = 'Debe ser un número válido';
+$string['error_positive_grade']         = 'Debe ser 0 o mayor';
 
 // ── Marketplace: vista estudiante ─────────────────────────────────────────────
 $string['marketplacetitle']          = 'Mercado de Recompensas';
