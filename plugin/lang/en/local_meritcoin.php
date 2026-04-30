@@ -211,3 +211,6 @@ $string['rule_min_grade_placeholder']   = 'Leave empty for no minimum';
 $string['rule_min_grade_help']          = 'If set, coins are only awarded when the student reaches this grade. Leave empty to always award coins.';
 $string['error_invalid_grade']          = 'Must be a number';
 $string['error_positive_grade']         = 'Must be 0 or greater';
+
+$string['col_reevals']      = 'Reevals';
+$string['col_reevals_hint'] = 'Number of times this activity has been graded';

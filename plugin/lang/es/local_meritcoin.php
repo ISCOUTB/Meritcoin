@@ -211,3 +211,6 @@ $string['rule_min_grade_placeholder']   = 'Dejar vacío para no exigir nota mín
 $string['rule_min_grade_help']          = 'Si se configura, solo se otorgan monedas cuando el estudiante alcanza o supera esta nota. Dejar vacío para otorgar monedas sin importar la calificación.';
 $string['error_invalid_grade']          = 'Debe ser un número válido';
 $string['error_positive_grade']         = 'Debe ser 0 o mayor';
+
+$string['col_reevals']      = 'Reevals';
+$string['col_reevals_hint'] = 'Número de veces que esta actividad ha sido calificada';

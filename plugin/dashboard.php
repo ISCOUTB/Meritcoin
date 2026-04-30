@@ -51,13 +51,18 @@ $total_spent = (float)$DB->get_field_sql(
 $real_balance = max(0, $earned_local - $total_spent);
 
 // ✅ Columnas correctas: userid, timecreated
-$events  = $DB->get_records(
-    'local_meritcoin_queue',
-    ['userid' => $USER->id],
-    'timecreated DESC',
-    '*',
-    0,
-    20
+$events = $DB->get_records_sql(
+    "SELECT q.*,
+            (SELECT COUNT(*)
+               FROM {local_meritcoin_queue} q2
+              WHERE q2.userid  = q.userid
+                AND q2.cmid    = q.cmid
+                AND q2.cmid   IS NOT NULL) AS reeval_count
+       FROM {local_meritcoin_queue} q
+      WHERE q.userid = :userid
+      ORDER BY q.timecreated DESC
+      LIMIT 20",
+    ['userid' => $USER->id]
 );
 
 // Datos del backend (pueden fallar silenciosamente)
@@ -241,15 +246,18 @@ echo $OUTPUT->header();
               <tr>
                 <th><?= get_string('coltype', 'local_meritcoin') ?></th>
                 <th><?= get_string('colcourse', 'local_meritcoin') ?></th>
+                <th><?= get_string('colactivity', 'local_meritcoin') ?></th>
                 <th><?= get_string('colgrade', 'local_meritcoin') ?></th>
+                <th><?= get_string('col_reevals', 'local_meritcoin') ?></th>
                 <th><?= get_string('colstatus', 'local_meritcoin') ?></th>
                 <th><?= get_string('coldate', 'local_meritcoin') ?></th>
               </tr>
             </thead>
             <tbody>
               <?php foreach ($events as $event):
-                // ✅ Columna correcta: courseid (no course_id)
                 $course = $DB->get_record('course', ['id' => $event->courseid], 'fullname', IGNORE_MISSING);
+                $activitylabel = !empty($event->activity_name) ? $event->activity_name : '—';
+                $reevals = (int)($event->reeval_count ?? 0);
               ?>
                 <tr>
                   <td>
@@ -263,21 +271,31 @@ echo $OUTPUT->header();
                       </span>
                     <?php endif; ?>
                   </td>
-                  <td class="text-truncate" style="max-width:200px;"
+                  <td class="text-truncate" style="max-width:160px;"
                       title="<?= s($course ? $course->fullname : '') ?>">
                     <?= s($course ? $course->fullname : 'Curso ' . $event->courseid) ?>
+                  </td>
+                  <td class="text-truncate" style="max-width:160px;"
+                      title="<?= s($activitylabel) ?>">
+                    <?= s($activitylabel) ?>
                   </td>
                   <td>
                     <?= $event->grade !== null
                         ? number_format((float)$event->grade, 1)
                         : '<span class="text-muted">—</span>' ?>
                   </td>
+                  <td class="text-center">
+                    <?php if (!empty($event->cmid) && $reevals > 1): ?>
+                      <span class="badge bg-warning text-dark" title="<?= get_string('col_reevals_hint', 'local_meritcoin') ?>">
+                        <i class="fa fa-refresh me-1"></i><?= $reevals ?>
+                      </span>
+                    <?php else: ?>
+                      <span class="text-muted">—</span>
+                    <?php endif; ?>
+                  </td>
                   <td><?= local_meritcoin_status_badge($event->status) ?></td>
                   <td class="text-nowrap">
-                    <?php
-                      // ✅ Columna correcta: timecreated (no created_at)
-                      echo userdate($event->timecreated, get_string('strftimedatetimeshort', 'langconfig'));
-                    ?>
+                    <?= userdate($event->timecreated, get_string('strftimedatetimeshort', 'langconfig')) ?>
                   </td>
                 </tr>
               <?php endforeach; ?>
