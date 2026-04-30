@@ -26,14 +26,9 @@ $PAGE->requires->css(new moodle_url('/local/meritcoin/styles/dashboard.css'));
 $course_config = $DB->get_record('local_meritcoin_course_config', ['courseid' => $courseid]);
 $coin_symbol   = $course_config ? $course_config->coin_symbol : 'MRT';
 
-// ── Balance disponible del estudiante (GLOBAL) ────────────────────────────────
-$earned = (float)$DB->get_field_sql(
-    "SELECT COALESCE(SUM(coins_amount), 0)
-       FROM {local_meritcoin_queue}
-      WHERE userid = :userid
-        AND status = 'sent'",
-    ['userid' => $USER->id]
-);
+// ── Balance disponible del estudiante (desde contrato via backend) ─────────────
+$wallet  = local_meritcoin_get_user_wallet($USER->id);
+$backend = local_meritcoin_get_backend_student_data($USER->id, $wallet);
 
 $spent = (float)$DB->get_field_sql(
     "SELECT COALESCE(SUM(coins_spent), 0)
@@ -42,7 +37,19 @@ $spent = (float)$DB->get_field_sql(
     ['userid' => $USER->id]
 );
 
-$available = max(0, $earned - $spent);
+// Si el backend está disponible usa el balance real del contrato,
+// si no, cae al cálculo local como fallback
+if ($backend['backend_available']) {
+    $available = max(0, ($backend['mrt_balance'] ?? 0) - $spent);
+} else {
+    $earned = (float)$DB->get_field_sql(
+        "SELECT COALESCE(SUM(coins_amount), 0)
+           FROM {local_meritcoin_queue}
+          WHERE userid = :userid AND status = 'sent'",
+        ['userid' => $USER->id]
+    );
+    $available = max(0, $earned - $spent);
+}
 
 // ── Acción POST: canjear recompensa ───────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'redeem' && $rid > 0) {
