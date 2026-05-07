@@ -223,3 +223,19 @@ $string['teacher_all_students']       = 'Todos los estudiantes';
 $string['teacher_clear_filter']       = 'Limpiar filtro';
 $string['teacher_no_earnings']        = 'No hay monedas otorgadas aún en este curso.';
 $string['admin_tab_transactions']     = 'Todas las transacciones';
+
+// ── Verificación de insignias (badge_verify.php) ──────────────────────────────
+$string['badge_verify_title']         = 'Verificación de Insignia — MeritCoin';
+$string['badge_verify_authentic']     = 'Insignia Auténtica';
+$string['badge_verify_not_authentic'] = 'Insignia no encontrada';
+$string['badge_verify_invalid_title'] = 'Insignia Inválida';
+$string['badge_verify_no_hash']       = 'No se proporcionó ningún código de verificación.';
+$string['badge_verify_invalid']       = 'El formato del código de verificación es inválido.';
+$string['badge_verify_not_found']     = 'No se encontró ninguna insignia con este código de verificación.';
+$string['badge_verify_student']       = 'Otorgada a';
+$string['badge_verify_course']        = 'Curso';
+$string['badge_verify_type']          = 'Tipo';
+$string['badge_verify_issued_by']     = 'Emitida por';
+$string['badge_verify_issued_on']     = 'Fecha de emisión';
+$string['badge_verify_coins']         = 'MRT al momento de emisión';
+$string['badge_verify_help']          = 'Si crees que esto es un error, contacta a la institución que emitió la insignia.';

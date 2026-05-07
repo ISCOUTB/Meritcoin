@@ -223,3 +223,19 @@ $string['teacher_all_students']       = 'All students';
 $string['teacher_clear_filter']       = 'Clear filter';
 $string['teacher_no_earnings']        = 'No coins awarded yet in this course.';
 $string['admin_tab_transactions']     = 'All transactions';
+
+// Badge verification page
+$string['badge_verify_title']        = 'Badge Verification — MeritCoin';
+$string['badge_verify_authentic']    = 'Authentic Badge';
+$string['badge_verify_not_authentic']= 'Badge not found';
+$string['badge_verify_invalid_title']= 'Invalid Badge';
+$string['badge_verify_no_hash']      = 'No verification code provided.';
+$string['badge_verify_invalid']      = 'The verification code format is invalid.';
+$string['badge_verify_not_found']    = 'No badge was found with this verification code.';
+$string['badge_verify_student']      = 'Awarded to';
+$string['badge_verify_course']       = 'Course';
+$string['badge_verify_type']         = 'Type';
+$string['badge_verify_issued_by']    = 'Issued by';
+$string['badge_verify_issued_on']    = 'Issued on';
+$string['badge_verify_coins']        = 'MRT at issue';
+$string['badge_verify_help']         = 'If you believe this is an error, contact the institution that issued the badge.';

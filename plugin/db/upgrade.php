@@ -283,5 +283,32 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026043001, 'local', 'meritcoin');
     }
 
+        // ── v0.3.1: tabla de insignias con hash de verificación ─────────────────
+    if ($oldversion < 2026050703) {
+
+        $table = new xmldb_table('local_meritcoin_badges');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id',               XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+            $table->add_field('userid',           XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('courseid',         XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('badge_name',       XMLDB_TYPE_CHAR,    '255',  null, XMLDB_NOTNULL, null, null);
+            $table->add_field('badge_type',       XMLDB_TYPE_CHAR,    '50',   null, XMLDB_NOTNULL, null, 'merit');
+            $table->add_field('issued_by',        XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('verify_hash',      XMLDB_TYPE_CHAR,    '64',   null, XMLDB_NOTNULL, null, null);
+            $table->add_field('coins_threshold',  XMLDB_TYPE_NUMBER,  '10,2', null, false,         null, null);
+            $table->add_field('description',      XMLDB_TYPE_TEXT,    null,   null, false,         null, null);
+            $table->add_field('timecreated',      XMLDB_TYPE_INTEGER, '10',   null, XMLDB_NOTNULL, null, '0');
+
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_index('badges_userid_idx',      XMLDB_INDEX_NOTUNIQUE, ['userid']);
+            $table->add_index('badges_courseid_idx',    XMLDB_INDEX_NOTUNIQUE, ['courseid']);
+            $table->add_index('badges_hash_uix',        XMLDB_INDEX_UNIQUE,    ['verify_hash']);
+
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026050703, 'local', 'meritcoin');
+    }
+
     return true;
 }

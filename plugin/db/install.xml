@@ -230,5 +230,42 @@
       </INDEXES>
     </TABLE>
 
+        <!-- ═══════════════════════════════════════════════════════════════════════
+         Insignias otorgadas a estudiantes.
+         verify_hash es un SHA-256 único que permite verificar la autenticidad
+         de la insignia desde una URL pública sin requerir login.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <TABLE NAME="local_meritcoin_badges" COMMENT="Badges awarded to students with public verification hash">
+      <FIELDS>
+        <FIELD NAME="id"              TYPE="int"    LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid"          TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"
+               COMMENT="Moodle user ID del estudiante"/>
+        <FIELD NAME="courseid"        TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"
+               COMMENT="Curso en el que se otorgó la insignia"/>
+        <FIELD NAME="badge_name"      TYPE="char"   LENGTH="255" NOTNULL="true"
+               COMMENT="Nombre de la insignia"/>
+        <FIELD NAME="badge_type"      TYPE="char"   LENGTH="50"  NOTNULL="true" DEFAULT="merit"
+               COMMENT="completion, grade, merit"/>
+        <FIELD NAME="issued_by"       TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"
+               COMMENT="userid del profesor que emitió la insignia"/>
+        <FIELD NAME="verify_hash"     TYPE="char"   LENGTH="64"  NOTNULL="true"
+               COMMENT="SHA-256 único para URL de verificación pública"/>
+        <FIELD NAME="coins_threshold" TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="false"
+               COMMENT="Monedas acumuladas al momento de la emisión"/>
+        <FIELD NAME="description"     TYPE="text"   NOTNULL="false"
+               COMMENT="Descripción o criterios de la insignia"/>
+        <FIELD NAME="timecreated"     TYPE="int"    LENGTH="10"  NOTNULL="true" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="badges_userid_idx"   UNIQUE="false" FIELDS="userid"/>
+        <INDEX NAME="badges_courseid_idx" UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="badges_hash_uix"     UNIQUE="true"  FIELDS="verify_hash"
+               COMMENT="Un hash por insignia; garantiza unicidad de URLs de verificación"/>
+      </INDEXES>
+    </TABLE>
+
   </TABLES>
 </XMLDB>
