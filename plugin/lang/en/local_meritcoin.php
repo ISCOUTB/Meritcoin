@@ -239,3 +239,17 @@ $string['badge_verify_issued_by']    = 'Issued by';
 $string['badge_verify_issued_on']    = 'Issued on';
 $string['badge_verify_coins']        = 'MRT at issue';
 $string['badge_verify_help']         = 'If you believe this is an error, contact the institution that issued the badge.';
+
+// ── Badge PDF certificate (badge_pdf.php) ─────────────────────────────────────
+$string['badge_pdf_certificate_label'] = 'Badge Certificate';
+$string['badge_pdf_awarded_to_label']  = 'This certifies that';
+$string['badge_pdf_course']            = 'Course';
+$string['badge_pdf_issued_by']         = 'Issued by';
+$string['badge_pdf_issued_on']         = 'Issue date';
+$string['badge_pdf_verified']          = 'Verified';
+$string['badge_pdf_verify_at']         = 'Verify at';
+$string['badge_pdf_institution']       = 'Tecnológica de Bolívar';
+
+$string['badge_pdf_download'] = 'Download PDF';
+$string['badge_copy_link']    = 'Copy link';
+$string['badge_link_copied']  = 'Link copied!';

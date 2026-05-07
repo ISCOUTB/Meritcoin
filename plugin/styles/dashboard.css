@@ -262,3 +262,24 @@
     .mrt-skill-tag { background: #1e3a5a; border-color: #2a5280; color: #a8caf0; }
     .mrt-criteria-list li { color: #cbd5e0; }
 }
+
+/* Badge actions ---------------------------------------------------------- */
+.mrt-badge-actions { margin-top: .5rem; }
+.mrt-btn-pdf {
+    font-size: 0.75rem;
+    background: #c0392b;
+    color: #fff;
+    border-radius: 6px;
+    padding: .3rem .6rem;
+    font-weight: 500;
+}
+.mrt-btn-pdf:hover { background: #a93226; color: #fff; }
+.mrt-btn-copy-link {
+    font-size: 0.75rem;
+    color: #0d3b5e;
+    padding: .3rem .6rem;
+    font-weight: 500;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+}
+.mrt-btn-copy-link:hover { background: #f0f4f8; }

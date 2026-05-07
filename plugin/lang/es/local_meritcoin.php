@@ -239,3 +239,17 @@ $string['badge_verify_issued_by']     = 'Emitida por';
 $string['badge_verify_issued_on']     = 'Fecha de emisión';
 $string['badge_verify_coins']         = 'MRT al momento de emisión';
 $string['badge_verify_help']          = 'Si crees que esto es un error, contacta a la institución que emitió la insignia.';
+
+// ── Certificado PDF (badge_pdf.php) ───────────────────────────────────────────
+$string['badge_pdf_certificate_label'] = 'Certificado de Insignia';
+$string['badge_pdf_awarded_to_label']  = 'Se certifica que';
+$string['badge_pdf_course']            = 'Curso';
+$string['badge_pdf_issued_by']         = 'Emitido por';
+$string['badge_pdf_issued_on']         = 'Fecha de emisión';
+$string['badge_pdf_verified']          = 'Verificado';
+$string['badge_pdf_verify_at']         = 'Verificar en';
+$string['badge_pdf_institution']       = 'Tecnológica de Bolívar';
+
+$string['badge_pdf_download'] = 'Descargar PDF';
+$string['badge_copy_link']    = 'Copiar enlace';
+$string['badge_link_copied']  = '¡Enlace copiado!';

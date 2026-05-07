@@ -67,6 +67,13 @@ $backend = local_meritcoin_get_backend_student_data($USER->id, $wallet);
 
 $PAGE->requires->css(new moodle_url('/local/meritcoin/styles/dashboard.css'));
 
+// Insignias locales del estudiante (con hash de verificación)
+$local_badges = $DB->get_records(
+    'local_meritcoin_badges',
+    ['userid' => $USER->id],
+    'timecreated DESC'
+);
+
 echo $OUTPUT->header();
 ?>
 
@@ -135,74 +142,49 @@ echo $OUTPUT->header();
     </div>
   </div>
 
-  <!-- INSIGNIAS -->
-  <div class="card mb-4">
-    <div class="card-header d-flex align-items-center gap-2">
-      <i class="fa fa-shield-alt text-warning"></i>
-      <strong><?= get_string('badgessection', 'local_meritcoin') ?></strong>
-      <?php if ($backend['backend_available']): ?>
-        <span class="badge bg-warning text-dark ms-auto"><?= count($backend['badges']) ?></span>
-      <?php endif; ?>
-    </div>
-    <div class="card-body">
-      <?php if (!$backend['backend_available']): ?>
-        <p class="text-muted text-center py-3">
-          <i class="fa fa-plug fa-2x d-block mb-2"></i>
-          <?= get_string('badgesbackendneeded', 'local_meritcoin') ?>
-        </p>
-      <?php elseif (empty($backend['badges'])): ?>
-        <div class="mrt-empty-state text-center py-4">
-          <i class="fa fa-medal fa-3x text-muted mb-3 d-block"></i>
-          <p class="text-muted"><?= get_string('nobadgesyet', 'local_meritcoin') ?></p>
-          <small class="text-muted"><?= get_string('nobadgeshint', 'local_meritcoin') ?></small>
-        </div>
-      <?php else: ?>
-        <div class="mrt-badges-grid">
-          <?php foreach ($backend['badges'] as $badge):
-            $badgeMeta = [
-              'id'          => $badge['id'] ?? '',
-              'name'        => $badge['name'] ?? 'Insignia',
-              'description' => $badge['description'] ?? '',
-              'skills'      => $badge['skills'] ?? [],
-              'criteria'    => $badge['criteria'] ?? [],
-              'image_url'   => $badge['image_url'] ?? '',
-              'awarded_at'  => !empty($badge['awarded_at'])
-                                ? userdate($badge['awarded_at'], get_string('strftimedate', 'langconfig'))
-                                : '',
-              'issued_by'   => $badge['issued_by'] ?? '',
-              'verify_url'  => !empty($badge['id'])
-                                ? (new moodle_url('/local/meritcoin/badge_verify.php', ['id' => $badge['id']]))->out(false)
-                                : '',
-              'pdf_url'     => !empty($badge['id'])
-                                ? (new moodle_url('/local/meritcoin/badge_pdf.php', ['id' => $badge['id']]))->out(false)
-                                : '',
-            ];
-          ?>
-            <button type="button"
-                    class="mrt-badge-item mrt-badge-trigger btn p-0 text-start"
-                    data-badge='<?= htmlspecialchars(json_encode($badgeMeta, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>'
-                    aria-label="Ver detalles de <?= s($badge['name'] ?? 'Insignia') ?>">
-              <div class="mrt-badge-icon">
-                <?php if (!empty($badge['image_url'])): ?>
-                  <img src="<?= s($badge['image_url']) ?>" alt="<?= s($badge['name'] ?? '') ?>"
-                       width="64" height="64" loading="lazy">
-                <?php else: ?>
-                  <i class="fa fa-award fa-3x text-warning"></i>
-                <?php endif; ?>
-              </div>
-              <div class="mrt-badge-name"><?= s($badge['name'] ?? 'Badge') ?></div>
-              <div class="mrt-badge-date text-muted">
-                <?= !empty($badge['awarded_at'])
-                    ? userdate($badge['awarded_at'], get_string('strftimedate', 'langconfig'))
-                    : '' ?>
-              </div>
-              <div class="mrt-badge-hint"><i class="fa fa-eye"></i> Ver detalles</div>
-            </button>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
-    </div>
+  <!-- BADGES -->
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="fa fa-shield-alt text-warning"></i>
+    <strong><?= get_string('badgessection', 'local_meritcoin') ?></strong>
+    <span class="badge bg-warning text-dark ms-auto"><?= count($local_badges) ?></span>
   </div>
+  <div class="card-body">
+    <?php if (empty($local_badges)): ?>
+      <div class="mrt-empty-state text-center py-4">
+        <i class="fa fa-medal fa-3x text-muted mb-3 d-block"></i>
+        <p class="text-muted"><?= get_string('nobadgesyet', 'local_meritcoin') ?></p>
+        <small class="text-muted"><?= get_string('nobadgeshint', 'local_meritcoin') ?></small>
+      </div>
+    <?php else: ?>
+      <div class="mrt-badges-grid">
+        <?php foreach ($local_badges as $lb):
+          $lb_course = $DB->get_record('course', ['id' => $lb->courseid], 'fullname', IGNORE_MISSING);
+        ?>
+          <div class="mrt-badge-item text-center">
+            <div class="mrt-badge-icon">
+              <i class="fa fa-award fa-3x text-warning"></i>
+            </div>
+            <div class="mrt-badge-name"><?= s($lb->badge_name) ?></div>
+            <div class="mrt-badge-date text-muted">
+              <?= userdate($lb->timecreated, get_string('strftimedate', 'langconfig')) ?>
+            </div>
+            <div class="mrt-badge-actions mt-2 d-flex flex-column gap-1">
+              <a href="<?= new moodle_url('/local/meritcoin/badge_pdf.php', ['hash' => $lb->verify_hash]) ?>"
+                 class="btn btn-sm mrt-btn-pdf" target="_blank">
+                <i class="fa fa-file-pdf-o me-1"></i><?= get_string('badge_pdf_download', 'local_meritcoin') ?>
+              </a>
+              <button class="btn btn-sm mrt-btn-copy-link"
+                      data-url="<?= s($CFG->wwwroot . '/local/meritcoin/badge_verify.php?hash=' . $lb->verify_hash) ?>">
+                <i class="fa fa-link me-1"></i><?= get_string('badge_copy_link', 'local_meritcoin') ?>
+              </button>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </div>
+</div>
 
   <!-- HISTORIAL -->
   <div class="card mb-4">
@@ -378,6 +360,19 @@ document.querySelectorAll('.mrt-copy-btn').forEach(function(btn) {
             var icon = btn.querySelector('i');
             icon.className = 'fa fa-check text-success';
             setTimeout(function() { icon.className = 'fa fa-copy'; }, 1500);
+        });
+    });
+});
+
+// Copiar enlace de insignia (nuevo)
+document.querySelectorAll('.mrt-btn-copy-link').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var url = this.getAttribute('data-url');
+        navigator.clipboard.writeText(url).then(function() {
+            btn.innerHTML = '<i class="fa fa-check me-1"></i><?= get_string('badge_link_copied', 'local_meritcoin') ?>';
+            setTimeout(function() {
+                btn.innerHTML = '<i class="fa fa-link me-1"></i><?= get_string('badge_copy_link', 'local_meritcoin') ?>';
+            }, 2000);
         });
     });
 });
