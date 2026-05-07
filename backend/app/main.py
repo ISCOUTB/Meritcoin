@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import events, students
+from app.api import events, students, badges
 from app.core.config import settings
 from app.core.database import init_db
 
@@ -33,13 +33,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MeritCoin API",
     description="Backend off-chain para el sistema de insignias digitales MeritCoin (MRT)",
-    version="0.1.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
 # ── Routers ──────────────────────────────────────────────────────────────
 app.include_router(events.router)
 app.include_router(students.router)
+app.include_router(badges.router)
 
 
 @app.get("/health", tags=["System"])
