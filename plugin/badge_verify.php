@@ -1,242 +1,191 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// Verificación pública de insignia por hash SHA-256
+// Accesible sin login para compartir externamente
 
-/**
- * Página pública de verificación de insignias MeritCoin.
- * Accesible sin login. URL: /local/meritcoin/badge_verify.php?hash=XXXX
- *
- * @package   local_meritcoin
- * @copyright 2026 Universidad Tecnológica de Bolívar
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
+require_once('../../config.php');
+require_once($CFG->dirroot . '/local/meritcoin/lib.php');
 
-// Permitir acceso sin sesión activa.
-define('NO_MOODLE_COOKIES', true);
+$hash = required_param('hash', PARAM_ALPHANUM);
 
-require_once(__DIR__ . '/../../config.php');
-
-$hash = optional_param('hash', '', PARAM_ALPHANUM);
-
-$PAGE->set_context(context_system::instance());
 $PAGE->set_url(new moodle_url('/local/meritcoin/badge_verify.php', ['hash' => $hash]));
+$PAGE->set_context(context_system::instance());
 $PAGE->set_title(get_string('badge_verify_title', 'local_meritcoin'));
 $PAGE->set_heading(get_string('badge_verify_title', 'local_meritcoin'));
 $PAGE->set_pagelayout('base');
 
-// ── Consulta ──────────────────────────────────────────────────────────────────
-$badge    = null;
-$student  = null;
-$issuer   = null;
-$course   = null;
-$valid    = false;
-$error    = '';
+global $DB, $OUTPUT;
 
-if (empty($hash)) {
-    $error = get_string('badge_verify_no_hash', 'local_meritcoin');
-} else {
-    // Limpiar hash: solo hex lowercase.
-    $clean = preg_replace('/[^a-f0-9]/i', '', $hash);
-    if (strlen($clean) !== 64) {
-        $error = get_string('badge_verify_invalid', 'local_meritcoin');
-    } else {
-        $badge = $DB->get_record('local_meritcoin_badges', ['verify_hash' => $clean]);
-        if (!$badge) {
-            $error = get_string('badge_verify_not_found', 'local_meritcoin');
-        } else {
-            $valid   = true;
-            $student = $DB->get_record('user',   ['id' => $badge->userid],   'id,firstname,lastname,email');
-            $issuer  = $DB->get_record('user',   ['id' => $badge->issued_by], 'id,firstname,lastname');
-            $course  = $DB->get_record('course', ['id' => $badge->courseid],  'id,fullname,shortname');
-        }
-    }
-}
+// Buscar insignia por hash
+$badge = $DB->get_record_sql(
+    "SELECT b.*,
+            bt.color        AS type_color,
+            bt.icon         AS type_icon,
+            bt.name         AS type_name,
+            c.fullname      AS course_fullname,
+            c.shortname     AS course_shortname,
+            u.firstname     AS student_firstname,
+            u.lastname      AS student_lastname,
+            iss.firstname   AS issuer_firstname,
+            iss.lastname    AS issuer_lastname
+       FROM {local_meritcoin_badges}      b
+  LEFT JOIN {local_meritcoin_badge_types} bt  ON bt.shortname = b.badge_type
+  LEFT JOIN {course}                      c   ON c.id         = b.courseid
+  LEFT JOIN {user}                        u   ON u.id         = b.userid
+  LEFT JOIN {user}                        iss ON iss.id       = b.issued_by
+      WHERE b.verify_hash = :hash",
+    ['hash' => $hash]
+);
 
-// ── Salida HTML ───────────────────────────────────────────────────────────────
+$PAGE->requires->css(new moodle_url('/local/meritcoin/styles/dashboard.css'));
+
 echo $OUTPUT->header();
+
+if (!$badge) {
+    echo html_writer::div(
+        html_writer::tag('i', '', ['class' => 'fa fa-times-circle fa-4x text-danger mb-3 d-block']) .
+        html_writer::tag('h3', get_string('badge_verify_invalid', 'local_meritcoin')) .
+        html_writer::tag('p', get_string('badge_verify_invalid_desc', 'local_meritcoin'), ['class' => 'text-muted']),
+        'text-center py-5'
+    );
+    echo $OUTPUT->footer();
+    die;
+}
+
+$student_name  = s(trim($badge->student_firstname . ' ' . $badge->student_lastname));
+$issuer_name   = s(trim($badge->issuer_firstname  . ' ' . $badge->issuer_lastname));
+$awarded_date  = userdate($badge->timecreated, get_string('strftimedate', 'langconfig'));
+$type_color    = s($badge->type_color  ?? '#f0c040');
+$type_icon     = s($badge->type_icon   ?? 'fa-award');
 ?>
-<style>
-.mrt-verify-wrap {
-    max-width: 680px;
-    margin: 2rem auto;
-    padding: 0 1rem;
-    font-family: inherit;
-}
-.mrt-verify-card {
-    border-radius: 1rem;
-    padding: 2.5rem 2rem;
-    text-align: center;
-}
-.mrt-verify-card.valid {
-    background: #f0fdf4;
-    border: 2px solid #22c55e;
-}
-.mrt-verify-card.invalid {
-    background: #fef2f2;
-    border: 2px solid #ef4444;
-}
-.mrt-verify-icon {
-    font-size: 4rem;
-    margin-bottom: 1rem;
-    display: block;
-}
-.mrt-verify-badge-name {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: #1a2540;
-    margin-bottom: 0.5rem;
-}
-.mrt-verify-status {
-    display: inline-block;
-    padding: 0.3rem 1rem;
-    border-radius: 9999px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    margin-bottom: 1.5rem;
-}
-.mrt-verify-status.valid  { background: #22c55e; color: #fff; }
-.mrt-verify-status.invalid { background: #ef4444; color: #fff; }
-.mrt-verify-details {
-    background: #fff;
-    border-radius: 0.75rem;
-    padding: 1.25rem 1.5rem;
-    text-align: left;
-    margin-top: 1.5rem;
-    border: 1px solid #e5e7eb;
-}
-.mrt-verify-details dl {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.5rem 1.5rem;
-    margin: 0;
-}
-.mrt-verify-details dt {
-    font-weight: 600;
-    color: #6b7280;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    align-self: center;
-}
-.mrt-verify-details dd {
-    color: #1a2540;
-    margin: 0;
-    font-size: 0.95rem;
-    align-self: center;
-}
-.mrt-verify-hash {
-    margin-top: 1.5rem;
-    background: #f3f4f6;
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    font-family: monospace;
-    font-size: 0.75rem;
-    color: #6b7280;
-    word-break: break-all;
-    text-align: left;
-}
-.mrt-verify-error {
-    color: #dc2626;
-    font-size: 1.1rem;
-    margin: 0.5rem 0 1.5rem;
-}
-.mrt-verify-back {
-    margin-top: 1.5rem;
-    display: inline-block;
-    padding: 0.6rem 1.5rem;
-    background: #0d3b5e;
-    color: #fff;
-    border-radius: 0.5rem;
-    text-decoration: none;
-    font-weight: 500;
-}
-.mrt-verify-back:hover { background: #1a5276; color: #fff; }
-</style>
 
-<div class="mrt-verify-wrap">
+<div class="container py-5" style="max-width:640px;">
 
-<?php if ($valid && $badge): ?>
+  <!-- Tarjeta de verificación -->
+  <div class="card shadow-sm border-0 text-center">
 
-    <div class="mrt-verify-card valid">
-        <span class="mrt-verify-icon">🏅</span>
-        <div class="mrt-verify-badge-name"><?php echo s($badge->badge_name); ?></div>
-        <span class="mrt-verify-status valid">
-            ✔ <?php echo get_string('badge_verify_authentic', 'local_meritcoin'); ?>
-        </span>
+    <!-- Banner de estado verificado -->
+    <div class="d-flex align-items-center justify-content-center gap-2 py-3 rounded-top"
+         style="background:linear-gradient(135deg,#1a7f37,#2ea44f); color:#fff;">
+      <i class="fa fa-check-circle fa-lg"></i>
+      <strong><?= get_string('badge_verified', 'local_meritcoin') ?></strong>
+    </div>
 
-        <?php if ($badge->description): ?>
-            <p style="color:#374151;margin-bottom:0;"><?php echo s($badge->description); ?></p>
+    <div class="card-body py-4">
+
+      <!-- Ícono / imagen -->
+      <div class="mb-3">
+        <?php if (!empty($badge->image_url)): ?>
+          <img src="<?= s($badge->image_url) ?>" alt="<?= s($badge->badge_name) ?>"
+               width="96" height="96" loading="lazy"
+               style="border-radius:16px; object-fit:contain;">
+        <?php else: ?>
+          <span style="font-size:4rem; display:block; line-height:1;">
+            <i class="fa <?= $type_icon ?>" style="color:<?= $type_color ?>"></i>
+          </span>
+        <?php endif; ?>
+      </div>
+
+      <!-- Tipo pill -->
+      <?php if (!empty($badge->badge_type)): ?>
+        <div class="mb-2">
+          <span class="badge rounded-pill px-3 py-1"
+                style="background-color:<?= $type_color ?>; color:#000; font-size:0.8em;">
+            <?= s($badge->type_name ?? $badge->badge_type) ?>
+          </span>
+        </div>
+      <?php endif; ?>
+
+      <!-- Nombre de la insignia -->
+      <h2 class="fw-bold mb-1"><?= s($badge->badge_name) ?></h2>
+
+      <!-- Estudiante -->
+      <p class="text-muted mb-3">
+        <i class="fa fa-user me-1"></i>
+        <?= get_string('badge_awarded_to', 'local_meritcoin') ?>
+        <strong><?= $student_name ?></strong>
+      </p>
+
+      <hr class="my-3">
+
+      <!-- Metadatos en grid -->
+      <div class="row g-3 text-start">
+
+        <div class="col-6">
+          <div class="mrt-meta-label text-muted small"><?= get_string('colcourse', 'local_meritcoin') ?></div>
+          <div class="mrt-meta-value fw-semibold"><?= s($badge->course_fullname) ?></div>
+        </div>
+
+        <div class="col-6">
+          <div class="mrt-meta-label text-muted small"><?= get_string('coldate', 'local_meritcoin') ?></div>
+          <div class="mrt-meta-value fw-semibold"><?= $awarded_date ?></div>
+        </div>
+
+        <?php if ($issuer_name): ?>
+        <div class="col-12">
+          <div class="mrt-meta-label text-muted small"><?= get_string('badge_issued_by', 'local_meritcoin') ?></div>
+          <div class="mrt-meta-value fw-semibold"><?= $issuer_name ?></div>
+        </div>
         <?php endif; ?>
 
-        <div class="mrt-verify-details">
-            <dl>
-                <dt><?php echo get_string('badge_verify_student', 'local_meritcoin'); ?></dt>
-                <dd><?php echo s(fullname($student)); ?></dd>
-
-                <dt><?php echo get_string('badge_verify_course', 'local_meritcoin'); ?></dt>
-                <dd>
-                    <?php echo s($course->fullname); ?>
-                    <?php if ($course->shortname !== $course->fullname): ?>
-                        <small style="color:#9ca3af;">(<?php echo s($course->shortname); ?>)</small>
-                    <?php endif; ?>
-                </dd>
-
-                <dt><?php echo get_string('badge_verify_type', 'local_meritcoin'); ?></dt>
-                <dd><?php echo s($badge->badge_type); ?></dd>
-
-                <dt><?php echo get_string('badge_verify_issued_by', 'local_meritcoin'); ?></dt>
-                <dd><?php echo $issuer ? s(fullname($issuer)) : '—'; ?></dd>
-
-                <dt><?php echo get_string('badge_verify_issued_on', 'local_meritcoin'); ?></dt>
-                <dd><?php echo userdate($badge->timecreated, get_string('strftimedatefullshort', 'core_langconfig')); ?></dd>
-
-                <?php if ($badge->coins_threshold !== null): ?>
-                <dt><?php echo get_string('badge_verify_coins', 'local_meritcoin'); ?></dt>
-                <dd><?php echo number_format((float)$badge->coins_threshold, 2); ?> MRT</dd>
-                <?php endif; ?>
-            </dl>
+        <?php if (!empty($badge->description)): ?>
+        <div class="col-12">
+          <div class="mrt-meta-label text-muted small"><?= get_string('badge_description', 'local_meritcoin') ?></div>
+          <div class="mrt-meta-value"><?= s($badge->description) ?></div>
         </div>
+        <?php endif; ?>
 
-        <div class="mrt-verify-hash">
-            <strong>Hash de verificación:</strong><br>
-            <?php echo s($badge->verify_hash); ?>
+        <?php if (!empty($badge->criteria)): ?>
+        <div class="col-12">
+          <div class="mrt-meta-label text-muted small mb-1"><?= get_string('badge_criteria', 'local_meritcoin') ?></div>
+          <ul class="mb-0 ps-3">
+            <?php foreach (array_filter(array_map('trim', explode("\n", $badge->criteria))) as $c): ?>
+              <li><?= s($c) ?></li>
+            <?php endforeach; ?>
+          </ul>
         </div>
+        <?php endif; ?>
+
+      </div>
+
+      <hr class="my-3">
+
+      <!-- Hash de verificación -->
+      <div class="text-muted" style="font-size:0.72em; word-break:break-all;">
+        <i class="fa fa-fingerprint me-1"></i>
+        <strong><?= get_string('badge_hash', 'local_meritcoin') ?>:</strong>
+        <?= s($badge->verify_hash) ?>
+      </div>
+
     </div>
 
-<?php else: ?>
-
-    <div class="mrt-verify-card invalid">
-        <span class="mrt-verify-icon">❌</span>
-        <div class="mrt-verify-badge-name"><?php echo get_string('badge_verify_invalid_title', 'local_meritcoin'); ?></div>
-        <span class="mrt-verify-status invalid">
-            <?php echo get_string('badge_verify_not_authentic', 'local_meritcoin'); ?>
-        </span>
-        <p class="mrt-verify-error"><?php echo s($error); ?></p>
-        <p style="color:#6b7280;font-size:0.9rem;">
-            <?php echo get_string('badge_verify_help', 'local_meritcoin'); ?>
-        </p>
+    <!-- Footer de la tarjeta -->
+    <div class="card-footer bg-transparent border-top d-flex justify-content-center gap-2 py-3">
+      <a href="<?= new moodle_url('/local/meritcoin/badge_pdf.php', ['hash' => $hash]) ?>"
+         class="btn btn-sm mrt-btn-pdf" target="_blank">
+        <i class="fa fa-file-pdf me-1"></i><?= get_string('badge_pdf_download', 'local_meritcoin') ?>
+      </a>
+      <button class="btn btn-sm btn-outline-secondary"
+              onclick="navigator.clipboard.writeText(window.location.href).then(function(){
+                  var b=this;
+              });" id="mrt-copy-verify-link">
+        <i class="fa fa-link me-1"></i><?= get_string('badge_copy_link', 'local_meritcoin') ?>
+      </button>
     </div>
 
-<?php endif; ?>
-
-    <div style="text-align:center;">
-        <a class="mrt-verify-back" href="<?php echo new moodle_url('/local/meritcoin/dashboard.php'); ?>">
-            ← <?php echo get_string('pluginname', 'local_meritcoin'); ?>
-        </a>
-    </div>
+  </div>
 
 </div>
-<?php
-echo $OUTPUT->footer();
+
+<script>
+document.getElementById('mrt-copy-verify-link').addEventListener('click', function() {
+    navigator.clipboard.writeText(window.location.href).then(function() {
+        var btn = document.getElementById('mrt-copy-verify-link');
+        btn.innerHTML = '<i class="fa fa-check me-1"></i><?= get_string('badge_link_copied', 'local_meritcoin') ?>';
+        setTimeout(function() {
+            btn.innerHTML = '<i class="fa fa-link me-1"></i><?= get_string('badge_copy_link', 'local_meritcoin') ?>';
+        }, 2000);
+    });
+});
+</script>
+
+<?php echo $OUTPUT->footer(); ?>);
