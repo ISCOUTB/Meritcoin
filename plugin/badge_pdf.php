@@ -1,251 +1,327 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+// Genera y descarga un certificado PDF de insignia
+// Usa HTML+CSS imprimible con window.print() — sin dependencias externas
 
-/**
- * Genera y descarga el certificado PDF de una insignia MeritCoin.
- * Solo accesible por el propietario de la insignia o un admin.
- * URL: /local/meritcoin/badge_pdf.php?hash=XXXX
- *
- * @package   local_meritcoin
- * @copyright 2026 Universidad Tecnológica de Bolívar
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-
-require_once(__DIR__ . '/../../config.php');
-// Forzar recarga del string manager
-get_string_manager()->reset_caches();
-$PAGE->set_context(context_system::instance());
-$PAGE->set_url(new moodle_url('/local/meritcoin/badge_pdf.php'));
-force_current_language($CFG->lang ?? 'es');
-require_once($CFG->libdir . '/tcpdf/tcpdf.php');
-
-require_login();
+require_once('../../config.php');
+require_once($CFG->dirroot . '/local/meritcoin/lib.php');
 
 $hash = required_param('hash', PARAM_ALPHANUM);
 
-// ── Validar hash ──────────────────────────────────────────────────────────────
-$clean = preg_replace('/[^a-f0-9]/i', '', $hash);
-if (strlen($clean) !== 64) {
-    throw new moodle_exception('badge_verify_invalid', 'local_meritcoin');
+// Verificar que la insignia existe
+global $DB, $CFG;
+
+$badge = $DB->get_record_sql(
+    "SELECT b.*,
+            bt.color        AS type_color,
+            bt.icon         AS type_icon,
+            bt.name         AS type_name,
+            c.fullname      AS course_fullname,
+            u.firstname     AS student_firstname,
+            u.lastname      AS student_lastname,
+            iss.firstname   AS issuer_firstname,
+            iss.lastname    AS issuer_lastname
+       FROM {local_meritcoin_badges}      b
+  LEFT JOIN {local_meritcoin_badge_types} bt  ON bt.shortname = b.badge_type
+  LEFT JOIN {course}                      c   ON c.id         = b.courseid
+  LEFT JOIN {user}                        u   ON u.id         = b.userid
+  LEFT JOIN {user}                        iss ON iss.id       = b.issued_by
+      WHERE b.verify_hash = :hash",
+    ['hash' => $hash]
+);
+
+if (!$badge) {
+    throw new moodle_exception('invalidhash', 'local_meritcoin');
 }
 
-// ── Obtener insignia ──────────────────────────────────────────────────────────
-$badge = $DB->get_record('local_meritcoin_badges', ['verify_hash' => $clean], '*', MUST_EXIST);
+$student_name  = trim($badge->student_firstname . ' ' . $badge->student_lastname);
+$issuer_name   = trim($badge->issuer_firstname  . ' ' . $badge->issuer_lastname);
+$awarded_date  = userdate($badge->timecreated, get_string('strftimedate', 'langconfig'));
+$verify_url    = $CFG->wwwroot . '/local/meritcoin/badge_verify.php?hash=' . urlencode($badge->verify_hash);
+$type_color    = $badge->type_color  ?? '#f0c040';
+$type_name     = $badge->type_name   ?? $badge->badge_type;
+$site_name     = get_site()->fullname;
 
-// ── Solo el dueño o un admin puede descargar ──────────────────────────────────
-$sysctx = context_system::instance();
-if ($badge->userid !== $USER->id && !has_capability('moodle/site:config', $sysctx)) {
-    throw new moodle_exception('nopermissions', 'error', '', 'download badge PDF');
-}
+// Sin layout Moodle — página standalone para imprimir/guardar como PDF
+header('Content-Type: text/html; charset=utf-8');
+?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><?= htmlspecialchars(get_string('badge_certificate_title', 'local_meritcoin')) ?> — <?= htmlspecialchars($badge->badge_name) ?></title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600&display=swap');
 
-// ── Cargar datos relacionados ─────────────────────────────────────────────────
-$student = $DB->get_record('user',   ['id' => $badge->userid],    'id,firstname,lastname', MUST_EXIST);
-$issuer  = $DB->get_record('user',   ['id' => $badge->issued_by], 'id,firstname,lastname', IGNORE_MISSING);
-$course  = $DB->get_record('course', ['id' => $badge->courseid],  'id,fullname,shortname', MUST_EXIST);
-$siteurl = $CFG->wwwroot;
-$verifyurl = $siteurl . '/local/meritcoin/badge_verify.php?hash=' . $clean;
-$issued_date = userdate($badge->timecreated, '%d de %B de %Y');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-// ── Colores corporativos ──────────────────────────────────────────────────────
-$navy   = [13,  59,  94];   // #0d3b5e
-$gold   = [240, 192, 64];   // #f0c040
-$white  = [255, 255, 255];
-$gray   = [108, 117, 125];
-$light  = [248, 249, 250];
-$green  = [25,  135, 84];
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f5f4f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
 
-// ── Configurar TCPDF ──────────────────────────────────────────────────────────
-$pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
-$pdf->SetCreator('MeritCoin - UTB');
-$pdf->SetAuthor($siteurl);
-$pdf->SetTitle('Certificado de Insignia - ' . $badge->badge_name);
-$pdf->SetSubject('MeritCoin Badge Certificate');
-$pdf->SetKeywords('MeritCoin, Badge, Certificate, ' . $badge->badge_name);
+    .certificate {
+      background: #fff;
+      width: 794px;          /* A4 horizontal */
+      min-height: 560px;
+      border-radius: 16px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+      overflow: hidden;
+      position: relative;
+    }
 
-$pdf->setPrintHeader(false);
-$pdf->setPrintFooter(false);
-$pdf->SetMargins(0, 0, 0);
-$pdf->SetAutoPageBreak(false, 0);
-$pdf->AddPage();
+    /* Franja superior de color */
+    .cert-top-bar {
+      height: 12px;
+      background: <?= htmlspecialchars($type_color) ?>;
+    }
 
-$W = 297; // A4 landscape width mm
-$H = 210; // A4 landscape height mm
+    .cert-body {
+      padding: 3rem 3.5rem 2.5rem;
+      text-align: center;
+    }
 
-// ── FONDO ─────────────────────────────────────────────────────────────────────
-// Fondo completo navy
-$pdf->SetFillColor(...$navy);
-$pdf->Rect(0, 0, $W, $H, 'F');
+    /* Logo / ícono */
+    .cert-icon {
+      font-size: 5rem;
+      line-height: 1;
+      color: <?= htmlspecialchars($type_color) ?>;
+      margin-bottom: 1.5rem;
+    }
+    .cert-icon img {
+      width: 100px;
+      height: 100px;
+      object-fit: contain;
+      border-radius: 12px;
+    }
 
-// Franja dorada superior
-$pdf->SetFillColor(...$gold);
-$pdf->Rect(0, 0, $W, 4, 'F');
+    /* Encabezado */
+    .cert-eyebrow {
+      font-size: 0.75rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 0.5rem;
+    }
+    .cert-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 2.4rem;
+      color: #1a1a1a;
+      line-height: 1.15;
+      margin-bottom: 0.5rem;
+    }
+    .cert-type-pill {
+      display: inline-block;
+      background: <?= htmlspecialchars($type_color) ?>;
+      color: #000;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.9rem;
+      border-radius: 9999px;
+      margin-bottom: 1.5rem;
+    }
 
-// Franja dorada inferior
-$pdf->Rect(0, $H - 4, $W, 4, 'F');
+    /* Estudiante */
+    .cert-awarded-to {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 0.25rem;
+    }
+    .cert-student {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 1.5rem;
+    }
 
-// Panel blanco central
-$pdf->SetFillColor(...$white);
-$pdf->RoundedRect(20, 14, $W - 40, $H - 28, 6, '1111', 'F');
+    /* Descripción */
+    .cert-description {
+      font-size: 0.92rem;
+      color: #555;
+      max-width: 520px;
+      margin: 0 auto 1.5rem;
+      line-height: 1.6;
+    }
 
-// Banda lateral izquierda navy (decorativa)
-$pdf->SetFillColor(...$navy);
-$pdf->Rect(20, 14, 52, $H - 28, 'F');
+    /* Metadatos en fila */
+    .cert-meta {
+      display: flex;
+      justify-content: center;
+      gap: 3rem;
+      margin-bottom: 2rem;
+      padding: 1.25rem 0;
+      border-top: 1px solid #e8e8e8;
+      border-bottom: 1px solid #e8e8e8;
+    }
+    .cert-meta-item { text-align: center; }
+    .cert-meta-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 0.2rem;
+    }
+    .cert-meta-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #222;
+    }
 
-// ── LADO IZQUIERDO: logo + ícono ──────────────────────────────────────────────
-// Hexágono decorativo (ícono MRT)
-$pdf->SetFillColor(...$gold);
-$pdf->SetFont('helvetica', 'B', 32);
-$pdf->SetTextColor(...$gold);
-$pdf->SetXY(20, 30);
-$pdf->Cell(52, 20, "\xE2\xAC\xA1", 0, 1, 'C'); // ⬡ Unicode
+    /* Firma / emisor */
+    .cert-issuer {
+      margin-bottom: 1.5rem;
+    }
+    .cert-issuer-line {
+      width: 200px;
+      height: 1px;
+      background: #ccc;
+      margin: 0 auto 0.4rem;
+    }
+    .cert-issuer-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #333;
+    }
+    .cert-issuer-label {
+      font-size: 0.72rem;
+      color: #999;
+    }
 
-// Nombre del plugin
-$pdf->SetFont('helvetica', 'B', 11);
-$pdf->SetTextColor(...$white);
-$pdf->SetXY(20, 50);
-$pdf->Cell(52, 8, 'MeritCoin', 0, 1, 'C');
+    /* Footer hash + QR hint */
+    .cert-footer {
+      background: #f9f8f5;
+      padding: 0.75rem 3.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.68rem;
+      color: #aaa;
+      word-break: break-all;
+    }
+    .cert-footer a {
+      color: #666;
+      text-decoration: none;
+    }
+    .cert-site {
+      font-weight: 600;
+      white-space: nowrap;
+      margin-right: 1rem;
+    }
 
-$pdf->SetFont('helvetica', '', 8);
-$pdf->SetTextColor(180, 200, 220);
-$pdf->SetXY(20, 57);
-$pdf->Cell(52, 6, 'Universidad', 0, 1, 'C');
-$pdf->SetXY(20, 62);
-$pdf->Cell(52, 6, get_string('badge_pdf_institution', 'local_meritcoin'), 0, 1, 'C');
+    /* Botón imprimir — desaparece al imprimir */
+    .print-btn-wrap {
+      text-align: center;
+      margin-top: 1.5rem;
+    }
+    .print-btn {
+      background: #1a1a1a;
+      color: #fff;
+      border: none;
+      padding: 0.6rem 1.8rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .print-btn:hover { background: #333; }
 
-// Tipo de insignia (pill)
-$type_label = strtoupper($badge->badge_type);
-$pdf->SetFillColor(...$gold);
-$pdf->SetTextColor(...$navy);
-$pdf->SetFont('helvetica', 'B', 8);
-$pdf->RoundedRect(28, 130, 36, 9, 3, '1111', 'FD');
-$pdf->SetXY(28, 131);
-$pdf->Cell(36, 7, $type_label, 0, 1, 'C');
+    @media print {
+      body { background: #fff; padding: 0; }
+      .certificate { box-shadow: none; border-radius: 0; width: 100%; }
+      .print-btn-wrap { display: none; }
+    }
+  </style>
+</head>
+<body>
 
-// Monedas (si aplica)
-if ($badge->coins_threshold !== null) {
-    $pdf->SetFont('helvetica', '', 8);
-    $pdf->SetTextColor(180, 200, 220);
-    $pdf->SetXY(20, 145);
-    $pdf->Cell(52, 6, number_format((float)$badge->coins_threshold, 2) . ' MRT', 0, 1, 'C');
-}
+  <div>
+    <div class="certificate">
 
-// ── LADO DERECHO: contenido ───────────────────────────────────────────────────
-$rx = 80;  // x inicio contenido derecho
-$rw = $W - 40 - 52 - 10; // ancho disponible
+      <div class="cert-top-bar"></div>
 
-// "CERTIFICADO DE INSIGNIA"
-$pdf->SetFont('helvetica', '', 9);
-$pdf->SetTextColor(...$gray);
-$pdf->SetXY($rx, 22);
-$pdf->Cell($rw, 7, strtoupper(get_string('badge_pdf_certificate_label', 'local_meritcoin')), 0, 1, 'L');
+      <div class="cert-body">
 
-// Nombre de la insignia
-$pdf->SetFont('helvetica', 'B', 26);
-$pdf->SetTextColor(...$navy);
-$pdf->SetXY($rx, 28);
-$pdf->MultiCell($rw, 12, $badge->badge_name, 0, 'L');
+        <!-- Ícono -->
+        <div class="cert-icon">
+          <?php if (!empty($badge->image_url)): ?>
+            <img src="<?= htmlspecialchars($badge->image_url) ?>"
+                 alt="<?= htmlspecialchars($badge->badge_name) ?>">
+          <?php else: ?>
+            <i class="fa fa-award"></i>
+          <?php endif; ?>
+        </div>
 
-// Línea separadora dorada
-$pdf->SetDrawColor(...$gold);
-$pdf->SetLineWidth(0.8);
-$pdf->Line($rx, 55, $rx + 120, 55);
+        <div class="cert-eyebrow"><?= htmlspecialchars(get_string('badge_certificate_of', 'local_meritcoin')) ?></div>
+        <h1 class="cert-title"><?= htmlspecialchars($badge->badge_name) ?></h1>
 
-// "Se certifica que"
-$pdf->SetFont('helvetica', 'I', 11);
-$pdf->SetTextColor(...$gray);
-$pdf->SetXY($rx, 60);
-$pdf->Cell($rw, 8, get_string('badge_pdf_awarded_to_label', 'local_meritcoin'), 0, 1, 'L');
+        <?php if ($type_name): ?>
+          <div class="cert-type-pill"><?= htmlspecialchars($type_name) ?></div>
+        <?php endif; ?>
 
-// Nombre del estudiante
-$pdf->SetFont('helvetica', 'B', 20);
-$pdf->SetTextColor(...$navy);
-$pdf->SetXY($rx, 67);
-$pdf->Cell($rw, 12, fullname($student), 0, 1, 'L');
+        <div class="cert-awarded-to"><?= htmlspecialchars(get_string('badge_awarded_to', 'local_meritcoin')) ?></div>
+        <div class="cert-student"><?= htmlspecialchars($student_name) ?></div>
 
-// Descripción (si existe)
-if (!empty($badge->description)) {
-    $pdf->SetFont('helvetica', '', 10);
-    $pdf->SetTextColor(...$gray);
-    $pdf->SetXY($rx, 80);
-    $pdf->MultiCell($rw - 10, 6, $badge->description, 0, 'L');
-    $y_after_desc = $pdf->GetY() + 3;
-} else {
-    $y_after_desc = 82;
-}
+        <?php if (!empty($badge->description)): ?>
+          <p class="cert-description"><?= htmlspecialchars($badge->description) ?></p>
+        <?php endif; ?>
 
-// Curso
-$pdf->SetFont('helvetica', '', 9);
-$pdf->SetTextColor(...$gray);
-$pdf->SetXY($rx, $y_after_desc);
-$pdf->Cell(30, 6, get_string('badge_pdf_course', 'local_meritcoin') . ':', 0, 0, 'L');
-$pdf->SetFont('helvetica', 'B', 9);
-$pdf->SetTextColor(...$navy);
-$pdf->Cell($rw - 30, 6, $course->fullname, 0, 1, 'L');
+        <div class="cert-meta">
+          <div class="cert-meta-item">
+            <div class="cert-meta-label"><?= htmlspecialchars(get_string('colcourse', 'local_meritcoin')) ?></div>
+            <div class="cert-meta-value"><?= htmlspecialchars($badge->course_fullname) ?></div>
+          </div>
+          <div class="cert-meta-item">
+            <div class="cert-meta-label"><?= htmlspecialchars(get_string('coldate', 'local_meritcoin')) ?></div>
+            <div class="cert-meta-value"><?= htmlspecialchars($awarded_date) ?></div>
+          </div>
+          <div class="cert-meta-item">
+            <div class="cert-meta-label"><?= htmlspecialchars(get_string('badge_issued_by', 'local_meritcoin')) ?></div>
+            <div class="cert-meta-value"><?= htmlspecialchars($issuer_name ?: '—') ?></div>
+          </div>
+        </div>
 
-// Emitido por
-$pdf->SetFont('helvetica', '', 9);
-$pdf->SetTextColor(...$gray);
-$pdf->SetXY($rx, $y_after_desc + 8);
-$pdf->Cell(30, 6, get_string('badge_pdf_issued_by', 'local_meritcoin') . ':', 0, 0, 'L');
-$pdf->SetFont('helvetica', 'B', 9);
-$pdf->SetTextColor(...$navy);
-$pdf->Cell($rw - 30, 6, $issuer ? fullname($issuer) : '—', 0, 1, 'L');
+        <?php if ($issuer_name): ?>
+          <div class="cert-issuer">
+            <div class="cert-issuer-line"></div>
+            <div class="cert-issuer-name"><?= htmlspecialchars($issuer_name) ?></div>
+            <div class="cert-issuer-label"><?= htmlspecialchars(get_string('badge_issuer_role', 'local_meritcoin')) ?></div>
+          </div>
+        <?php endif; ?>
 
-// Fecha
-$pdf->SetFont('helvetica', '', 9);
-$pdf->SetTextColor(...$gray);
-$pdf->SetXY($rx, $y_after_desc + 16);
-$pdf->Cell(30, 6, get_string('badge_pdf_issued_on', 'local_meritcoin') . ':', 0, 0, 'L');
-$pdf->SetFont('helvetica', 'B', 9);
-$pdf->SetTextColor(...$navy);
-$pdf->Cell($rw - 30, 6, $issued_date, 0, 1, 'L');
+      </div>
 
-// ── SECCIÓN VERIFICACIÓN (parte inferior derecha) ─────────────────────────────
-$vy = $H - 38;
+      <div class="cert-footer">
+        <span class="cert-site"><?= htmlspecialchars($site_name) ?></span>
+        <span>
+          <strong><?= htmlspecialchars(get_string('badge_hash', 'local_meritcoin')) ?>:</strong>
+          <a href="<?= htmlspecialchars($verify_url) ?>" target="_blank">
+            <?= htmlspecialchars(substr($badge->verify_hash, 0, 20) . '...') ?>
+          </a>
+        </span>
+      </div>
 
-// Línea separadora sutil
-$pdf->SetDrawColor(220, 220, 220);
-$pdf->SetLineWidth(0.3);
-$pdf->Line($rx, $vy, $rx + $rw - 5, $vy);
+    </div>
 
-// Ícono de verificado + texto
-$pdf->SetFillColor(...$green);
-$pdf->SetTextColor(...$white);
-$pdf->SetFont('helvetica', 'B', 7);
-$pdf->RoundedRect($rx, $vy + 4, 28, 7, 2, '1111', 'F');
-$pdf->SetXY($rx, $vy + 5);
-$pdf->Cell(28, 5, "\xE2\x9C\x94 " . strtoupper(get_string('badge_pdf_verified', 'local_meritcoin')), 0, 0, 'C');
+    <div class="print-btn-wrap">
+      <button class="print-btn" onclick="window.print()">
+        ⬇ <?= htmlspecialchars(get_string('badge_pdf_download', 'local_meritcoin')) ?>
+      </button>
+    </div>
+  </div>
 
-// URL de verificación
-$pdf->SetFont('helvetica', '', 7);
-$pdf->SetTextColor(...$gray);
-$pdf->SetXY($rx + 32, $vy + 4);
-$pdf->Cell($rw - 32, 5, get_string('badge_pdf_verify_at', 'local_meritcoin') . ':', 0, 1, 'L');
-$pdf->SetFont('helvetica', 'B', 7);
-$pdf->SetTextColor(13, 59, 94);
-$pdf->SetXY($rx + 32, $vy + 9);
-$pdf->Cell($rw - 32, 5, $verifyurl, 0, 1, 'L');
+  <!-- FontAwesome para el ícono fallback -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+        crossorigin="anonymous" referrerpolicy="no-referrer">
 
-// Hash
-$pdf->SetFont('helvetica', '', 6);
-$pdf->SetTextColor(...$gray);
-$pdf->SetXY($rx, $vy + 17);
-$pdf->Cell($rw, 5, 'SHA-256: ' . $clean, 0, 1, 'L');
-
-// ── GENERAR Y DESCARGAR ───────────────────────────────────────────────────────
-$filename = 'meritcoin_badge_' . preg_replace('/[^a-z0-9]/i', '_', $badge->badge_name) . '.pdf';
-$pdf->Output($filename, 'D'); // D = fuerza descarga
-exit;
+</body>
+</html>
+<?php
+// No llamar a $OUTPUT->footer() — página standalone sin layout Moodle
+die;
+?>
