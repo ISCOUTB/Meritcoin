@@ -54,4 +54,14 @@ if ($hassiteconfig) {
         )
     );
 
+    // ── Gestión de tipos de insignia ─────────────────────────────────────────────
+    $ADMIN->add('localplugins',
+        new admin_externalpage(
+            'local_meritcoin_badge_types',
+            get_string('badge_types_title', 'local_meritcoin'),
+            new moodle_url('/local/meritcoin/badge_types.php'),
+            'moodle/site:config'
+        )
+    );
+
 }
