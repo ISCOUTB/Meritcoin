@@ -110,10 +110,14 @@ echo $OUTPUT->header();
       </h4>
       <small class="text-muted"><?= format_string($course->fullname) ?></small>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
       <a href="<?= new moodle_url('/local/meritcoin/teacher_transactions.php', ['courseid' => $courseid]) ?>"
          class="btn btn-sm btn-outline-primary">
         <i class="fa fa-chart-bar me-1"></i><?= get_string('teacher_transactions_title', 'local_meritcoin') ?>
+      </a>
+      <a href="<?= new moodle_url('/local/meritcoin/badge_award.php', ['courseid' => $courseid]) ?>"
+         class="btn btn-sm btn-outline-warning">
+        <i class="fa fa-medal me-1"></i><?= get_string('badge_award_title', 'local_meritcoin') ?>
       </a>
       <a href="<?= new moodle_url('/course/view.php', ['id' => $courseid]) ?>"
          class="btn btn-sm btn-outline-secondary">
