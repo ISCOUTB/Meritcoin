@@ -253,3 +253,105 @@ $string['badge_pdf_institution']       = 'Tecnológica de Bolívar';
 $string['badge_pdf_download'] = 'Download PDF';
 $string['badge_copy_link']    = 'Copy link';
 $string['badge_link_copied']  = 'Link copied!';
+
+// ── Badge templates ───────────────────────────────────────────────────────────
+$string['badge_templates_title']    = 'Badge Templates';
+$string['template_new']             = 'New template';
+$string['template_edit']            = 'Edit template';
+$string['template_empty']           = 'No templates yet. Create one to start awarding badges.';
+$string['template_created']         = 'Template created successfully.';
+$string['template_updated']         = 'Template updated successfully.';
+$string['template_deleted']         = 'Template deleted.';
+$string['template_has_badges']      = 'Cannot delete: badges have already been issued from this template.';
+$string['template_confirm_delete']  = 'Delete this template? This action cannot be undone.';
+$string['template_issued']          = 'issued';
+$string['template_name']            = 'Badge name';
+$string['template_type']            = 'Badge type';
+$string['template_description']     = 'Description';
+$string['template_description_help'] = 'Description of the achievement this badge represents. Will appear on the PDF certificate.';
+$string['template_criteria']        = 'Criteria';
+$string['template_criteria_help']   = 'Explain what the student must do to earn this badge.';
+$string['template_image_url']       = 'Image URL (optional)';
+$string['template_scope']           = 'Scope';
+$string['template_scope_help']      = 'Global: available for any course (admin only). Course: only for your course.';
+$string['template_scope_global']    = 'Global (all courses)';
+$string['template_scope_course']    = 'This course';
+$string['badge_award_btn']          = 'Award badge';
+
+// ── Award badge ───────────────────────────────────────────────────────────────
+$string['award_badge_title']      = 'Award Badge';
+$string['award_select_template']  = 'Badge template';
+$string['award_select_students']  = 'Students';
+$string['award_select_students_help'] = 'Hold Ctrl (or Cmd on Mac) to select multiple students at once.';
+$string['award_notes']            = 'Internal note (optional)';
+$string['award_btn']              = 'Award badge';
+$string['award_success']          = '{$a} badge(s) awarded successfully.';
+$string['award_none_issued']      = 'No badges were issued. Check your selection.';
+$string['award_no_templates']     = 'No templates available. Please create one first.';
+$string['award_no_students']      = 'No enrolled students with the required permissions.';
+
+// ── Badges: verify & PDF (v0.4.0) ────────────────────────────────────────────
+$string['badge_verify_title']       = 'Badge Verification';
+$string['badge_verified']           = '✓ Verified Badge';
+$string['badge_verify_invalid']     = 'Invalid badge';
+$string['badge_verify_invalid_desc']= 'This verification link is not valid or the badge no longer exists.';
+$string['badge_awarded_to']         = 'Awarded to';
+$string['badge_issued_by']          = 'Issued by';
+$string['badge_issuer_role']        = 'Course instructor';
+$string['badge_description']        = 'Description';
+$string['badge_criteria']           = 'Criteria';
+$string['badge_hash']               = 'Verification hash';
+$string['badge_copy_link']          = 'Copy link';
+$string['badge_link_copied']        = 'Copied!';
+$string['badge_pdf_download']       = 'Download certificate';
+$string['badge_certificate_title']  = 'Badge Certificate';
+$string['badge_certificate_of']     = 'Certificate of achievement';
+$string['verifybadge']              = 'Verify badge';
+$string['verify']                   = 'Verify';
+$string['balancelocal']             = 'local estimate';
+
+// ── Badges: award panel (v0.4.0) ──────────────────────────────────────────────
+$string['badge_award_title']          = 'Award Badges';
+$string['badge_award_new']            = 'Award a new badge';
+$string['badge_award_student']        = 'Student';
+$string['badge_award_select_student'] = 'Select a student';
+$string['badge_award_type']           = 'Badge type';
+$string['badge_award_select_type']    = 'Select a badge type';
+$string['badge_award_btn']            = 'Award';
+$string['badge_awarded_ok']           = 'Badge awarded successfully.';
+$string['badge_already_has']          = 'This student already has this badge in the course.';
+$string['badge_revoked_ok']           = 'Badge revoked.';
+$string['badge_revoke_btn']           = 'Revoke';
+$string['badge_revoke_confirm']       = 'Revoke this badge? This action cannot be undone.';
+$string['badge_awarded_list']         = 'Badges awarded in this course';
+$string['badge_none_awarded_yet']     = 'No badges awarded yet in this course.';
+$string['badge_no_types_warning']     = 'No badge types are configured. Go to the admin panel to create badge types first.';
+$string['badge_col_badge']            = 'Badge';
+$string['badge_col_student']          = 'Student';
+$string['badge_col_verify']           = 'Verify';
+
+$string['badge_types_menu'] = 'MeritCoin – Badge types';
+
+// ── Badge types admin (badge_types.php) ───────────────────────────────────────
+$string['badge_types_title']           = 'MeritCoin – Badge types';
+$string['badge_types_desc']            = 'Create and manage the types of badges that teachers can award to students.';
+$string['badge_types_list']            = 'Configured badge types';
+$string['badge_types_empty']           = 'No badge types configured yet. Create one to get started.';
+$string['badge_type_new']              = 'New badge type';
+$string['badge_type_edit']             = 'Edit badge type';
+$string['badge_type_name']             = 'Name';
+$string['badge_type_shortname']        = 'Shortname';
+$string['badge_type_shortname_help']   = 'Unique identifier, letters and numbers only. Cannot be changed for system types.';
+$string['badge_type_shortname_exists'] = 'A badge type with that shortname already exists.';
+$string['badge_type_description']      = 'Description';
+$string['badge_type_criteria']         = 'Award criteria';
+$string['badge_type_color']            = 'Color';
+$string['badge_type_icon']             = 'Icon';
+$string['badge_type_image_url']        = 'Image URL';
+$string['badge_type_sortorder']        = 'Sort order';
+$string['badge_type_enabled']          = 'Enabled';
+$string['badge_type_created']          = 'Badge type created successfully.';
+$string['badge_type_updated']          = 'Badge type updated successfully.';
+$string['badge_type_deleted']          = 'Badge type deleted.';
+$string['badge_type_toggled']          = 'Badge type status updated.';
+$string['badge_type_delete_confirm']   = 'Delete this badge type? This action cannot be undone.';
