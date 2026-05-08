@@ -124,7 +124,7 @@ echo $OUTPUT->header();
                   "SELECT COALESCE(SUM(coins_spent), 0) FROM {local_meritcoin_redemptions} WHERE userid = :userid",
                   ['userid' => $USER->id]
               );
-              $real_balance = max(0, ($backend['mrt_balance'] ?? 0) - $total_spent);
+              $real_balance = max(0, $backend['mrt_balance'] ?? 0);
               ?>
               <?= number_format($real_balance, 2) ?> <span class="mrt-ticker">MRT</span>
             <?php else: ?>
