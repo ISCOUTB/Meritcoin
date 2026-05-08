@@ -20,7 +20,7 @@
  * CÓMO FUNCIONA (explicación para no-expertos en Moodle):
  * ─────────────────────────────────────────────────────────
  * Las "capabilities" son permisos que controlan quién puede hacer qué.
- * Definimos cuatro permisos:
+ * Definimos los siguientes permisos:
  *
  *   1. manage        → Administradores que configuran el plugin a nivel global.
  *                      Contexto: sistema.
@@ -34,6 +34,18 @@
  *
  *   4. view_report   → Ver el informe de ganancias de un curso.
  *                      Contexto: curso. Disponible para profesores y estudiantes.
+ *
+ *   5. managerewards → Crear y gestionar recompensas del marketplace.
+ *                      Contexto: curso. Solo editingteacher y manager.
+ *
+ *   6. viewmarketplace → Ver y canjear recompensas del marketplace.
+ *                        Contexto: curso. Solo estudiantes.
+ *
+ *   7. awardbadges   → Otorgar y revocar insignias a estudiantes del curso.
+ *                      Contexto: curso. editingteacher, teacher y manager.
+ *                      Separado de manage_rules para que un profesor sin
+ *                      permisos de configuración pueda igualmente otorgar
+ *                      insignias manualmente.
  *
  * Puedes cambiar estos permisos en:
  *   Moodle → Administración del sitio → Usuarios → Permisos → Definir roles
@@ -117,4 +129,20 @@ $capabilities = [
             'manager'        => CAP_PREVENT,
         ],
     ],
+
+    // Permiso para otorgar y revocar insignias a estudiantes del curso.
+    // Intencionalmente incluye 'teacher' (no-editing) para que cualquier
+    // docente del curso pueda reconocer a sus estudiantes sin necesitar
+    // permisos de configuración de reglas.
+    'local/meritcoin:awardbadges' => [
+        'riskbitmask'  => RISK_PERSONAL,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes'   => [
+            'teacher'        => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+            'manager'        => CAP_ALLOW,
+        ],
+    ],
+
 ];
