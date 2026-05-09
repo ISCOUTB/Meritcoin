@@ -34,6 +34,8 @@ global $USER, $DB, $OUTPUT;
 $wallet = local_meritcoin_get_user_wallet($USER->id);
 $stats  = local_meritcoin_get_user_stats($USER->id);
 
+// Estos cálculos locales los dejamos por si quieres mostrarlos en el futuro,
+// pero el balance mostrado en el HERO usará solo el backend.
 $earned_local = (float)$DB->get_field_sql(
     "SELECT COALESCE(SUM(coins_amount), 0)
        FROM {local_meritcoin_queue}
@@ -63,7 +65,8 @@ $events = $DB->get_records_sql(
     ['userid' => $USER->id]
 );
 
-$backend = local_meritcoin_get_backend_student_data($USER->id, $wallet);
+// Backend: saldo real de la wallet + badges remotos (si aplica)
+$backend = local_meritcoin_get_backend_student_data($USER->id, $wallet); // [cite:9]
 
 $PAGE->requires->css(new moodle_url('/local/meritcoin/styles/dashboard.css'));
 
@@ -118,12 +121,9 @@ echo $OUTPUT->header();
         <div>
           <div class="mrt-balance-label"><?= get_string('mrtbalance', 'local_meritcoin') ?></div>
           <div class="mrt-balance-value">
-            <?php if ($backend['backend_available']): ?>
+            <?php if (!empty($backend['backend_available'])): ?>
               <?php
-              $total_spent = (float)$DB->get_field_sql(
-                  "SELECT COALESCE(SUM(coins_spent), 0) FROM {local_meritcoin_redemptions} WHERE userid = :userid",
-                  ['userid' => $USER->id]
-              );
+              // El backend ya devuelve el saldo neto de la wallet.
               $real_balance = max(0, $backend['mrt_balance'] ?? 0);
               ?>
               <?= number_format($real_balance, 2) ?> <span class="mrt-ticker">MRT</span>
@@ -173,7 +173,6 @@ echo $OUTPUT->header();
             $verify_url  = (string) new moodle_url('/local/meritcoin/badge_verify.php', ['hash' => $lb->verify_hash]);
             $pdf_url     = (string) new moodle_url('/local/meritcoin/badge_pdf.php',    ['hash' => $lb->verify_hash]);
 
-            // Criterios: campo texto libre almacenado en la plantilla; si no existe, array vacío
             $criteria_arr = [];
             if (!empty($lb->criteria)) {
                 $criteria_arr = array_filter(array_map('trim', explode("\n", $lb->criteria)));
@@ -184,7 +183,7 @@ echo $OUTPUT->header();
                 'awarded_at'  => userdate($lb->timecreated, get_string('strftimedate', 'langconfig')),
                 'image_url'   => $lb->image_url   ?? '',
                 'description' => $lb->description ?? '',
-                'skills'      => [],   // extensible a futuro
+                'skills'      => [],
                 'criteria'    => array_values($criteria_arr),
                 'issued_by'   => $issuer_name ?: null,
                 'verify_url'  => $verify_url,
@@ -457,6 +456,18 @@ document.querySelectorAll('.mrt-btn-copy-link[data-url]').forEach(function(btn) 
         }
     }
 
+    // Cierre explícito por botón de la X, para temas con Bootstrap viejo/jQuery
+    var closeBtn = modalEl.querySelector('[data-bs-dismiss="modal"]');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal && modal) {
+                modal.hide();
+            } else if (typeof jQuery !== 'undefined') {
+                jQuery('#mrt-badge-modal').modal('hide');
+            }
+        });
+    }
+
     document.querySelectorAll('.mrt-badge-trigger').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var data;
@@ -488,7 +499,7 @@ document.querySelectorAll('.mrt-btn-copy-link[data-url]').forEach(function(btn) 
             document.getElementById('mrt-modal-desc-wrap').style.display =
                 data.description ? '' : 'none';
 
-            // Tipo de insignia (NUEVO)
+            // Tipo de insignia
             var typeWrap = document.getElementById('mrt-modal-type-wrap');
             var typePill = document.getElementById('mrt-modal-type-pill');
             if (data.badge_type) {
@@ -500,7 +511,7 @@ document.querySelectorAll('.mrt-btn-copy-link[data-url]').forEach(function(btn) 
                 typeWrap.style.display = 'none';
             }
 
-            // Curso (NUEVO)
+            // Curso
             var courseWrap = document.getElementById('mrt-modal-course-wrap');
             if (data.course) {
                 document.getElementById('mrt-modal-course').textContent = data.course;
