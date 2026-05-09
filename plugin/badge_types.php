@@ -5,7 +5,7 @@
 require_once('../../config.php');
 require_once($CFG->dirroot . '/local/meritcoin/lib.php');
 
-$action    = optional_param('action',  '',  PARAM_ALPHA);
+$action    = optional_param('action',  '',  PARAM_ALPHANUMEXT);
 $typeid    = optional_param('typeid',  0,   PARAM_INT);
 $confirm   = optional_param('confirm', 0,   PARAM_INT);
 
@@ -56,7 +56,7 @@ if ($action === 'save_new' && confirm_sesskey()) {
     $rec->criteria      = optional_param('criteria',    '',  PARAM_TEXT);
     $rec->color         = optional_param('color',       '#f0c040', PARAM_TEXT);
     $rec->icon          = optional_param('icon',        'fa-award', PARAM_TEXT);
-    $rec->image_url     = optional_param('image_url',   '',  PARAM_URL);
+    $rec->imageurl      = optional_param('image_url',   '',  PARAM_URL);
     $rec->sortorder     = optional_param('sortorder',   0,   PARAM_INT);
     $rec->enabled       = optional_param('enabled',     0,   PARAM_INT);
     $rec->is_system     = 0;
@@ -89,7 +89,7 @@ if ($action === 'save_edit' && $typeid && confirm_sesskey()) {
     $rec->criteria    = optional_param('criteria',    '',  PARAM_TEXT);
     $rec->color       = optional_param('color',       '#f0c040', PARAM_TEXT);
     $rec->icon        = optional_param('icon',        'fa-award', PARAM_TEXT);
-    $rec->image_url   = optional_param('image_url',   '',  PARAM_URL);
+    $rec->imageurl    = optional_param('image_url',   '',  PARAM_URL);
     $rec->sortorder   = optional_param('sortorder',   0,   PARAM_INT);
     $rec->enabled     = optional_param('enabled',     0,   PARAM_INT);
 
@@ -210,8 +210,8 @@ echo $OUTPUT->header();
           <!-- Image URL -->
           <div class="col-12 col-md-6">
             <label class="form-label fw-semibold small"><?= get_string('badge_type_image_url', 'local_meritcoin') ?></label>
-            <input type="url" name="image_url" class="form-control"
-                   value="<?= s($editing->image_url ?? '') ?>" maxlength="500">
+            <input type="url" name="imageurl" class="form-control"
+                   value="<?= s($editing->imageurl ?? '') ?>" maxlength="500">
           </div>
 
           <!-- Orden -->
