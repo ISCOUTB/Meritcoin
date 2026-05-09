@@ -47,14 +47,13 @@ $capabilities = [
         ],
     ],
 
-    // NUEVO: gestionar tipos de insignia de sistema (solo admin/manager).
+    // Gestionar tipos de insignia de sistema (solo admin/manager).
     'local/meritcoin:manage_badge_types_system' => [
         'riskbitmask'  => RISK_CONFIG,
         'captype'      => 'write',
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes'   => [
             'manager' => CAP_ALLOW,
-            // Añade otros roles aquí si quieres (por ejemplo siteadmin personalizado).
         ],
     ],
 
@@ -112,7 +111,7 @@ $capabilities = [
         'archetypes'   => [
             'teacher'        => CAP_ALLOW,
             'editingteacher' => CAP_ALLOW,
-            'manager'        => CAPALLOW,
+            'manager'        => CAP_ALLOW,
         ],
     ],
 ];
