@@ -38,14 +38,9 @@ if ($action === 'award' && $badgeid && $userid && $confirm && confirm_sesskey())
 
     // EXTRA: si el tipo es de sistema y el profesor no tiene la capability especial, lo bloqueamos
     $syscontext = context_system::instance();
-    if (!empty($badge_type->is_system) &&
-        !has_capability('local/meritcoin:manage_badge_types_system', $syscontext)) {
-        throw new required_capability_exception(
-            $syscontext,
-            'local/meritcoin:manage_badge_types_system',
-            'nopermissions',
-            ''
-        );
+    $typesconditions = ['enabled' => 1];
+    if (!has_capability('moodle/site:config', $syscontext)) {
+        $typesconditions['is_system'] = 0;
     }
 
     $student = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
