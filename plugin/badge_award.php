@@ -29,8 +29,26 @@ $PAGE->requires->css(new moodle_url('/local/meritcoin/styles/dashboard.css'));
 // ── Acciones POST ─────────────────────────────────────────────────────────────
 if ($action === 'award' && $badgeid && $userid && $confirm && confirm_sesskey()) {
 
-    $badge_type = $DB->get_record('local_meritcoin_badge_types', ['id' => $badgeid], '*', MUST_EXIST);
-    $student    = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
+    // Solo se puede otorgar usando tipos habilitados
+    $badge_type = $DB->get_record('local_meritcoin_badge_types',
+        ['id' => $badgeid, 'enabled' => 1],
+        '*',
+        MUST_EXIST
+    );
+
+    // EXTRA: si el tipo es de sistema y el profesor no tiene la capability especial, lo bloqueamos
+    $syscontext = context_system::instance();
+    if (!empty($badge_type->is_system) &&
+        !has_capability('local/meritcoin:manage_badge_types_system', $syscontext)) {
+        throw new required_capability_exception(
+            $syscontext,
+            'local/meritcoin:manage_badge_types_system',
+            'nopermissions',
+            ''
+        );
+    }
+
+    $student = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
 
     // Verificar que el estudiante está en el curso
     if (!is_enrolled($context, $student)) {
@@ -45,17 +63,18 @@ if ($action === 'award' && $badgeid && $userid && $confirm && confirm_sesskey())
     ]);
 
     if (!$already) {
-        $record                = new stdClass();
-        $record->userid        = $userid;
-        $record->courseid      = $courseid;
-        $record->badge_type    = $badge_type->shortname;
-        $record->badge_name    = $badge_type->name;
-        $record->description   = $badge_type->description;
-        $record->criteria      = $badge_type->criteria ?? '';
-        $record->image_url     = $badge_type->image_url ?? '';
-        $record->issued_by     = $USER->id;
-        $record->timecreated   = time();
-        $record->verify_hash   = hash('sha256',
+        $record              = new stdClass();
+        $record->userid      = $userid;
+        $record->courseid    = $courseid;
+        $record->badge_type  = $badge_type->shortname;
+        $record->badge_name  = $badge_type->name;
+        $record->description = $badge_type->description;
+        $record->criteria    = $badge_type->criteria ?? '';
+        $record->image_url   = $badge_type->imageurl ?? ''; // usa imageurl del tipo
+        $record->issued_by   = $USER->id;
+        $record->timecreated = time();
+        $record->verify_hash = hash(
+            'sha256',
             $userid . $courseid . $badge_type->shortname . time() . random_bytes(16)
         );
         $DB->insert_record('local_meritcoin_badges', $record);
@@ -89,10 +108,20 @@ if ($action === 'revoke' && $badgeid && $userid && $confirm && confirm_sesskey()
 // ── Datos para la vista ───────────────────────────────────────────────────────
 
 // Tipos de insignia disponibles
-$badge_types = $DB->get_records('local_meritcoin_badge_types', ['enabled' => 1], 'sortorder ASC');
+// Filtro: solo tipos habilitados y, para profesores normales, que NO sean de sistema.
+$typesconditions = ['enabled' => 1];
+$syscontext      = context_system::instance();
+
+if (!has_capability('local/meritcoin:manage_badge_types_system', $syscontext)) {
+    $typesconditions['is_system'] = 0;
+}
+$badge_types = $DB->get_records('local_meritcoin_badge_types', $typesconditions, 'sortorder ASC'); // [cite:9]
 
 // Estudiantes del curso (rol student)
-$students = get_enrolled_users($context, 'mod/assign:submit', 0,
+$students = get_enrolled_users(
+    $context,
+    'mod/assign:submit',
+    0,
     'u.id, u.firstname, u.lastname, u.email, u.picture, u.imagealt',
     'u.lastname ASC'
 );

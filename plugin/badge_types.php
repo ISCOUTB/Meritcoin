@@ -5,9 +5,9 @@
 require_once('../../config.php');
 require_once($CFG->dirroot . '/local/meritcoin/lib.php');
 
-$action    = optional_param('action',  '',  PARAM_ALPHANUMEXT);
-$typeid    = optional_param('typeid',  0,   PARAM_INT);
-$confirm   = optional_param('confirm', 0,   PARAM_INT);
+$action  = optional_param('action',  '', PARAM_ALPHANUMEXT);
+$typeid  = optional_param('typeid',  0,   PARAM_INT);
+$confirm = optional_param('confirm', 0,   PARAM_INT);
 
 // ── Contexto y permisos ───────────────────────────────────────────────────────
 $context = context_system::instance();
@@ -46,22 +46,27 @@ if ($action === 'toggle' && $typeid && confirm_sesskey()) {
     );
 }
 
-// Guardar (crear o editar) — procesado por edit_badge_type.php
+// Guardar (crear o editar)
+
 // Crear nuevo tipo
 if ($action === 'save_new' && confirm_sesskey()) {
-    $rec                = new stdClass();
-    $rec->name          = required_param('name',        PARAM_TEXT);
-    $rec->shortname     = required_param('shortname',   PARAM_ALPHANUMEXT);
-    $rec->description   = optional_param('description', '',  PARAM_TEXT);
-    $rec->criteria      = optional_param('criteria',    '',  PARAM_TEXT);
-    $rec->color         = optional_param('color',       '#f0c040', PARAM_TEXT);
-    $rec->icon          = optional_param('icon',        'fa-award', PARAM_TEXT);
-    $rec->imageurl      = optional_param('image_url',   '',  PARAM_URL);
-    $rec->sortorder     = optional_param('sortorder',   0,   PARAM_INT);
-    $rec->enabled       = optional_param('enabled',     0,   PARAM_INT);
-    $rec->is_system     = 0;
-    $rec->createdby     = $USER->id;
-    $rec->timecreated   = time();
+    $rec               = new stdClass();
+    $rec->name         = required_param('name',       PARAM_TEXT);
+    $rec->shortname    = required_param('shortname',  PARAM_ALPHANUMEXT);
+    $rec->description  = optional_param('description','',  PARAM_TEXT);
+    $rec->criteria     = optional_param('criteria',   '',  PARAM_TEXT);
+    $rec->color        = optional_param('color',      '#f0c040', PARAM_TEXT);
+    $rec->icon         = optional_param('icon',       'fa-award', PARAM_TEXT);
+    $rec->imageurl     = optional_param('imageurl',   '',  PARAM_URL);
+    $rec->sortorder    = optional_param('sortorder',  0,   PARAM_INT);
+    $rec->enabled      = optional_param('enabled',    0,   PARAM_INT);
+    $rec->createdby    = $USER->id;
+    $rec->timecreated  = time();
+
+    // is_system solo lo puede tocar quien tenga la capability especial
+    $rec->is_system = has_capability('local/meritcoin:manage_badge_types_system', $context)
+        ? optional_param('is_system', 0, PARAM_INT)
+        : 0;
 
     if ($DB->record_exists('local_meritcoin_badge_types', ['shortname' => $rec->shortname])) {
         redirect(
@@ -84,18 +89,23 @@ if ($action === 'save_new' && confirm_sesskey()) {
 // Editar tipo existente
 if ($action === 'save_edit' && $typeid && confirm_sesskey()) {
     $rec              = $DB->get_record('local_meritcoin_badge_types', ['id' => $typeid], '*', MUST_EXIST);
-    $rec->name        = required_param('name',        PARAM_TEXT);
-    $rec->description = optional_param('description', '',  PARAM_TEXT);
-    $rec->criteria    = optional_param('criteria',    '',  PARAM_TEXT);
-    $rec->color       = optional_param('color',       '#f0c040', PARAM_TEXT);
-    $rec->icon        = optional_param('icon',        'fa-award', PARAM_TEXT);
-    $rec->imageurl    = optional_param('image_url',   '',  PARAM_URL);
-    $rec->sortorder   = optional_param('sortorder',   0,   PARAM_INT);
-    $rec->enabled     = optional_param('enabled',     0,   PARAM_INT);
+    $rec->name        = required_param('name',       PARAM_TEXT);
+    $rec->description = optional_param('description','',  PARAM_TEXT);
+    $rec->criteria    = optional_param('criteria',   '',  PARAM_TEXT);
+    $rec->color       = optional_param('color',      '#f0c040', PARAM_TEXT);
+    $rec->icon        = optional_param('icon',       'fa-award', PARAM_TEXT);
+    $rec->imageurl    = optional_param('imageurl',   '',  PARAM_URL);
+    $rec->sortorder   = optional_param('sortorder',  0,   PARAM_INT);
+    $rec->enabled     = optional_param('enabled',    0,   PARAM_INT);
 
     // shortname solo editable si no es sistema
     if (!$rec->is_system) {
         $rec->shortname = required_param('shortname', PARAM_ALPHANUMEXT);
+    }
+
+    // is_system solo editable por quien tenga la capability
+    if (has_capability('local/meritcoin:manage_badge_types_system', $context)) {
+        $rec->is_system = optional_param('is_system', $rec->is_system, PARAM_INT);
     }
 
     $DB->update_record('local_meritcoin_badge_types', $rec);
@@ -106,10 +116,14 @@ if ($action === 'save_edit' && $typeid && confirm_sesskey()) {
         \core\output\notification::NOTIFY_SUCCESS
     );
 }
-// (el formulario apunta a edit_badge_type.php)
 
 // ── Datos ─────────────────────────────────────────────────────────────────────
-$types = $DB->get_records('local_meritcoin_badge_types', null, 'sortorder ASC, id ASC');
+// Filtro: si no tiene la capability especial, no ve tipos de sistema
+$conditions = [];
+if (!has_capability('local/meritcoin:manage_badge_types_system', $context)) {
+    $conditions['is_system'] = 0;
+}
+$types = $DB->get_records('local_meritcoin_badge_types', $conditions, 'sortorder ASC, id ASC'); // [cite:9]
 
 // ── Render ────────────────────────────────────────────────────────────────────
 echo $OUTPUT->header();
@@ -141,7 +155,7 @@ echo $OUTPUT->header();
   </div>
 
   <?php if ($action === 'new' || ($action === 'edit' && $typeid)): ?>
-  <!-- ── Formulario crear / editar ─────────────────────────────────────────── -->
+  <!-- Formulario crear / editar -->
   <?php
     $editing = ($action === 'edit' && $typeid)
         ? $DB->get_record('local_meritcoin_badge_types', ['id' => $typeid], '*', MUST_EXIST)
@@ -232,6 +246,19 @@ echo $OUTPUT->header();
             </div>
           </div>
 
+          <!-- Solo admin/manager: marcar como tipo de sistema -->
+          <?php if (has_capability('local/meritcoin:manage_badge_types_system', $context)): ?>
+          <div class="col-12 col-md-3 d-flex align-items-end">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" name="is_system" value="1" id="chk-is-system"
+                     <?= (!empty($editing) && !empty($editing->is_system)) ? 'checked' : '' ?>>
+              <label class="form-check-label fw-semibold small" for="chk-is-system">
+                <?= get_string('badge_type_is_system', 'local_meritcoin') ?>
+              </label>
+            </div>
+          </div>
+          <?php endif; ?>
+
         </div><!-- row -->
 
         <div class="d-flex gap-2 mt-3">
@@ -248,7 +275,7 @@ echo $OUTPUT->header();
   </div>
   <?php endif; ?>
 
-  <!-- ── Tabla de tipos ─────────────────────────────────────────────────────── -->
+  <!-- Tabla de tipos -->
   <div class="card border-0 shadow-sm">
     <div class="card-header bg-transparent fw-semibold py-3 d-flex align-items-center justify-content-between">
       <span><i class="fa fa-list me-2"></i><?= get_string('badge_types_list', 'local_meritcoin') ?></span>
