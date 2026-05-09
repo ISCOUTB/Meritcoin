@@ -17,7 +17,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_meritcoin';
-$plugin->version   = 2026050707;     // YYYYMMDDXX
+$plugin->version   = 2026050802;     // YYYYMMDDXX
 $plugin->requires  = 2023100900;     // Moodle 4.3+
 $plugin->maturity  = MATURITY_ALPHA;
 $plugin->release   = '0.3.2';
