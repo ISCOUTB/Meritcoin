@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - [http://moodle.org/](http://moodle.org/)
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,39 +16,6 @@
 
 /**
  * Capabilities for local_meritcoin.
- *
- * CÓMO FUNCIONA (explicación para no-expertos en Moodle):
- * ─────────────────────────────────────────────────────────
- * Las "capabilities" son permisos que controlan quién puede hacer qué.
- * Definimos los siguientes permisos:
- *
- *   1. manage        → Administradores que configuran el plugin a nivel global.
- *                      Contexto: sistema.
- *
- *   2. viewqueue     → Ver el estado de la cola de eventos pendientes.
- *                      Contexto: sistema.
- *
- *   3. manage_rules  → Profesores/editores que configuran las reglas de monedas
- *                      de un curso específico.
- *                      Contexto: curso.
- *
- *   4. view_report   → Ver el informe de ganancias de un curso.
- *                      Contexto: curso. Disponible para profesores y estudiantes.
- *
- *   5. managerewards → Crear y gestionar recompensas del marketplace.
- *                      Contexto: curso. Solo editingteacher y manager.
- *
- *   6. viewmarketplace → Ver y canjear recompensas del marketplace.
- *                        Contexto: curso. Solo estudiantes.
- *
- *   7. awardbadges   → Otorgar y revocar insignias a estudiantes del curso.
- *                      Contexto: curso. editingteacher, teacher y manager.
- *                      Separado de manage_rules para que un profesor sin
- *                      permisos de configuración pueda igualmente otorgar
- *                      insignias manualmente.
- *
- * Puedes cambiar estos permisos en:
- *   Moodle → Administración del sitio → Usuarios → Permisos → Definir roles
  *
  * @package    local_meritcoin
  * @copyright  2026 Universidad Tecnológica de Bolívar
@@ -80,11 +47,20 @@ $capabilities = [
         ],
     ],
 
+    // NUEVO: gestionar tipos de insignia de sistema (solo admin/manager).
+    'local/meritcoin:manage_badge_types_system' => [
+        'riskbitmask'  => RISK_CONFIG,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes'   => [
+            'manager' => CAP_ALLOW,
+            // Añade otros roles aquí si quieres (por ejemplo siteadmin personalizado).
+        ],
+    ],
+
     // ── Curso ─────────────────────────────────────────────────────────────────
 
     // Permiso para crear, editar y eliminar reglas de monedas de un curso.
-    // Lo usan: manage.php, editrule.php, delete_rule.php.
-    // Por defecto: editingteacher y manager dentro del curso.
     'local/meritcoin:manage_rules' => [
         'riskbitmask'  => RISK_CONFIG,
         'captype'      => 'write',
@@ -96,8 +72,6 @@ $capabilities = [
     ],
 
     // Permiso para ver el informe de ganancias del curso.
-    // Lo usará el dashboard del estudiante y el informe del profesor.
-    // Por defecto: estudiantes, profesores y managers dentro del curso.
     'local/meritcoin:view_report' => [
         'captype'      => 'read',
         'contextlevel' => CONTEXT_COURSE,
@@ -131,9 +105,6 @@ $capabilities = [
     ],
 
     // Permiso para otorgar y revocar insignias a estudiantes del curso.
-    // Intencionalmente incluye 'teacher' (no-editing) para que cualquier
-    // docente del curso pueda reconocer a sus estudiantes sin necesitar
-    // permisos de configuración de reglas.
     'local/meritcoin:awardbadges' => [
         'riskbitmask'  => RISK_PERSONAL,
         'captype'      => 'write',
@@ -141,8 +112,7 @@ $capabilities = [
         'archetypes'   => [
             'teacher'        => CAP_ALLOW,
             'editingteacher' => CAP_ALLOW,
-            'manager'        => CAP_ALLOW,
+            'manager'        => CAPALLOW,
         ],
     ],
-
 ];
