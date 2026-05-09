@@ -26,28 +26,30 @@ class EventRecord(Base):
     """
     __tablename__ = "events"
 
-    event_id        = Column(String(255), primary_key=True)
-    student_wallet  = Column(String(42),  nullable=True, index=True)
-    student_id      = Column(String(255), nullable=False)
-    course_id       = Column(String(255), nullable=False)
-    course_name     = Column(String(500), default="")
-    activity_id     = Column(String(255), nullable=True)     # nuevo v0.2.0
-    activity_name   = Column(String(500), nullable=True)     # nuevo v0.2.0
-    event_type      = Column(String(50),  nullable=False)
-    grade           = Column(Float,       nullable=True)
-    coins_amount    = Column(Float,       nullable=True)     # nuevo v0.2.0
-    coin_symbol     = Column(String(10),  nullable=True, default="MRT")  # nuevo v0.2.0
-    processed_at    = Column(DateTime,    server_default=func.now(), nullable=False)
+    event_id = Column(String(255), primary_key=True)
+    student_wallet = Column(String(42), nullable=True, index=True)
+    student_id = Column(String(255), nullable=False)
+    course_id = Column(String(255), nullable=False)
+    course_name = Column(String(500), default="")
+    activity_id = Column(String(255), nullable=True)
+    activity_name = Column(String(500), nullable=True)
+    event_type = Column(String(50), nullable=False)
+    grade = Column(Float, nullable=True)
+    coins_amount = Column(Float, nullable=True)
+    coin_symbol = Column(String(10), nullable=True, default="MRT")
+    status = Column(String(20), nullable=False, default="processing", index=True)
+    last_error = Column(Text, nullable=True)
+    processed_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
 class AuditLog(Base):
     """Tabla de auditoría: trazabilidad completa de cada emisión."""
     __tablename__ = "audit_log"
 
-    event_id    = Column(String(255), primary_key=True)
-    cid_ipfs    = Column(Text,        nullable=False)
-    tx_badge    = Column(String(66),  nullable=True)   # 0x + 64 hex chars
-    tx_mrt      = Column(String(66),  nullable=True)
-    badge_id    = Column(String(255), nullable=True)
-    mrt_amount  = Column(String(255), nullable=True)
-    created_at  = Column(DateTime,    server_default=func.now(), nullable=False)
+    event_id = Column(String(255), primary_key=True)
+    cid_ipfs = Column(Text, nullable=True)
+    tx_badge = Column(String(66), nullable=True)
+    tx_mrt = Column(String(66), nullable=True)
+    badge_id = Column(String(255), nullable=True)
+    mrt_amount = Column(String(255), nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)

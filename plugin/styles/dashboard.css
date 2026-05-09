@@ -1,5 +1,5 @@
 /* ── MeritCoin Dashboard Styles ─────────────────────────────────────────── */
-/* Compatible con Moodle 4.x (Bootstrap 4/5) */
+/* Compatible con Moodle 4.x (Bootstrap 4/5) — v1.3 */
 
 /* Hero -------------------------------------------------------------------- */
 .mrt-hero {
@@ -45,19 +45,49 @@
 /* Badges grid ------------------------------------------------------------ */
 .mrt-badges-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
     gap: 1.25rem;
     padding: .5rem;
 }
+
 .mrt-badge-item {
-    background: #f8f9fa; border-radius: 10px;
-    padding: 1rem .5rem; transition: transform .2s, box-shadow .2s;
+    background: #f8f9fa;
+    border: 1.5px solid rgba(0,0,0,0.07);
+    border-radius: 12px;
+    padding: 1.1rem .75rem .85rem;
+    text-align: center;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    cursor: pointer;
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
-.mrt-badge-item:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.1); }
+.mrt-badge-item:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    border-color: #f0c040;
+}
+.mrt-badge-item:focus-visible {
+    outline: 2px solid #0d3b5e;
+    outline-offset: 3px;
+}
+
 .mrt-badge-icon { margin-bottom: .5rem; }
 .mrt-badge-icon img { width: 64px; height: 64px; object-fit: contain; margin: auto; }
-.mrt-badge-name { font-size: 0.82rem; font-weight: 600; line-height: 1.2; margin-top: .3rem; }
-.mrt-badge-date { font-size: 0.72rem; margin-top: .15rem; }
+.mrt-badge-name { font-size: 0.82rem; font-weight: 600; line-height: 1.2;
+                  margin-top: .3rem; color: #1a2540; }
+.mrt-badge-date { font-size: 0.70rem; margin-top: .15rem; color: #6c757d; }
+
+.mrt-badge-hint {
+    font-size: 0.70rem;
+    color: #0d3b5e;
+    opacity: 0;
+    margin-top: .35rem;
+    transition: opacity .2s ease;
+}
+.mrt-badge-item:hover .mrt-badge-hint { opacity: 1; }
 
 /* Empty states ----------------------------------------------------------- */
 .mrt-empty-state { color: #adb5bd; }
@@ -68,8 +98,188 @@
                             letter-spacing: .05em; font-weight: 600; }
 .mrt-dashboard .table td { vertical-align: middle; font-size: .9rem; }
 
-/* Dark mode (respeta el tema oscuro de Moodle) --------------------------- */
-@media (prefers-color-scheme: dark) {
-    .mrt-badge-item { background: #2d3748; }
-    .mrt-stat-card  { background: #1e2a3a; border-color: #2d3748; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL DE INSIGNIA
+═══════════════════════════════════════════════════════════════════════════ */
+
+.mrt-badge-modal-content {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,.2);
 }
+
+.mrt-badge-modal-header {
+    background: linear-gradient(135deg, #1a2540 0%, #0d3b5e 100%);
+    padding: 1.5rem 1.75rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: #fff;
+}
+
+.mrt-badge-modal-icon-wrap {
+    flex-shrink: 0;
+    width: 80px; height: 80px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+}
+
+.mrt-modal-icon-fallback {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%;
+    font-size: 2.4rem;
+    color: #f0c040;
+}
+
+.mrt-badge-modal-title-wrap { flex: 1; min-width: 0; }
+.mrt-badge-modal-title-wrap .modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mrt-modal-date {
+    font-size: 0.78rem;
+    color: rgba(255,255,255,0.65);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.mrt-badge-modal-body {
+    padding: 1.5rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    background: #fff;
+}
+
+.mrt-modal-section-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #6c757d;
+    margin-bottom: .6rem;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+}
+
+.mrt-skills-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+}
+
+.mrt-skill-tag {
+    display: inline-block;
+    background: #eef4ff;
+    color: #0d3b5e;
+    border: 1px solid #c8dcf5;
+    border-radius: 20px;
+    padding: .2rem .75rem;
+    font-size: 0.80rem;
+    font-weight: 500;
+}
+
+.mrt-criteria-list {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+}
+
+.mrt-criteria-list li {
+    font-size: 0.88rem;
+    color: #333;
+    padding-left: 1.4rem;
+    position: relative;
+}
+.mrt-criteria-list li::before {
+    content: '';
+    position: absolute;
+    left: 0; top: .45em;
+    width: 7px; height: 7px;
+    background: #f0c040;
+    border-radius: 50%;
+}
+
+.mrt-badge-modal-footer {
+    background: #f8f9fa;
+    border-top: 1px solid rgba(0,0,0,.07);
+    padding: 1rem 1.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem;
+    align-items: center;
+}
+
+.mrt-btn-verify {
+    background: #1a2540;
+    color: #fff !important;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: .45rem 1rem;
+    transition: background .2s ease;
+}
+.mrt-btn-verify:hover { background: #0d3b5e; }
+
+.mrt-btn-pdf {
+    background: #c0392b;
+    color: #fff !important;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: .45rem 1rem;
+    transition: background .2s ease;
+}
+.mrt-btn-pdf:hover { background: #a93226; }
+
+.mrt-btn-copy-link {
+    font-size: 0.875rem;
+    color: #0d3b5e;
+    padding: .45rem .75rem;
+    font-weight: 500;
+}
+.mrt-btn-copy-link:hover { color: #1a2540; text-decoration: none; }
+
+/* Dark mode -------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+    .mrt-badge-item { background: #2d3748; border-color: rgba(255,255,255,.08); }
+    .mrt-badge-name { color: #e2e8f0; }
+    .mrt-stat-card  { background: #1e2a3a; border-color: #2d3748; }
+    .mrt-badge-modal-body   { background: #1e2a3a; }
+    .mrt-badge-modal-footer { background: #172033; border-top-color: rgba(255,255,255,.07); }
+    .mrt-skill-tag { background: #1e3a5a; border-color: #2a5280; color: #a8caf0; }
+    .mrt-criteria-list li { color: #cbd5e0; }
+}
+
+/* Badge actions ---------------------------------------------------------- */
+.mrt-badge-actions { margin-top: .5rem; }
+.mrt-btn-pdf {
+    font-size: 0.75rem;
+    background: #c0392b;
+    color: #fff;
+    border-radius: 6px;
+    padding: .3rem .6rem;
+    font-weight: 500;
+}
+.mrt-btn-pdf:hover { background: #a93226; color: #fff; }
+.mrt-btn-copy-link {
+    font-size: 0.75rem;
+    color: #0d3b5e;
+    padding: .3rem .6rem;
+    font-weight: 500;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+}
+.mrt-btn-copy-link:hover { background: #f0f4f8; }

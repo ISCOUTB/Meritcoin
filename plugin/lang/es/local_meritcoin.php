@@ -223,3 +223,115 @@ $string['teacher_all_students']       = 'Todos los estudiantes';
 $string['teacher_clear_filter']       = 'Limpiar filtro';
 $string['teacher_no_earnings']        = 'No hay monedas otorgadas aún en este curso.';
 $string['admin_tab_transactions']     = 'Todas las transacciones';
+
+// ── Verificación de insignias (badge_verify.php) ──────────────────────────────
+$string['badge_verify_title']         = 'Verificación de Insignia — MeritCoin';
+$string['badge_verify_authentic']     = 'Insignia Auténtica';
+$string['badge_verify_not_authentic'] = 'Insignia no encontrada';
+$string['badge_verify_invalid_title'] = 'Insignia Inválida';
+$string['badge_verify_no_hash']       = 'No se proporcionó ningún código de verificación.';
+$string['badge_verify_invalid']       = 'El formato del código de verificación es inválido.';
+$string['badge_verify_not_found']     = 'No se encontró ninguna insignia con este código de verificación.';
+$string['badge_verify_student']       = 'Otorgada a';
+$string['badge_verify_course']        = 'Curso';
+$string['badge_verify_type']          = 'Tipo';
+$string['badge_verify_issued_by']     = 'Emitida por';
+$string['badge_verify_issued_on']     = 'Fecha de emisión';
+$string['badge_verify_coins']         = 'MRT al momento de emisión';
+$string['badge_verify_help']          = 'Si crees que esto es un error, contacta a la institución que emitió la insignia.';
+
+// ── Certificado PDF (badge_pdf.php) ───────────────────────────────────────────
+$string['badge_pdf_certificate_label'] = 'Certificado de Insignia';
+$string['badge_pdf_awarded_to_label']  = 'Se certifica que';
+$string['badge_pdf_course']            = 'Curso';
+$string['badge_pdf_issued_by']         = 'Emitido por';
+$string['badge_pdf_issued_on']         = 'Fecha de emisión';
+$string['badge_pdf_verified']          = 'Verificado';
+$string['badge_pdf_verify_at']         = 'Verificar en';
+$string['badge_pdf_institution']       = 'Tecnológica de Bolívar';
+
+$string['badge_pdf_download'] = 'Descargar PDF';
+$string['badge_copy_link']    = 'Copiar enlace';
+$string['badge_link_copied']  = '¡Enlace copiado!';
+
+// ── Badge templates ───────────────────────────────────────────────────────────
+$string['badge_templates_title']    = 'Plantillas de Insignias';
+$string['template_new']             = 'Nueva plantilla';
+$string['template_edit']            = 'Editar plantilla';
+$string['template_empty']           = 'Aún no hay plantillas. Crea una para comenzar a otorgar insignias.';
+$string['template_created']         = 'Plantilla creada correctamente.';
+$string['template_updated']         = 'Plantilla actualizada correctamente.';
+$string['template_deleted']         = 'Plantilla eliminada.';
+$string['template_has_badges']      = 'No se puede eliminar: ya hay insignias emitidas con esta plantilla.';
+$string['template_confirm_delete']  = '¿Eliminar esta plantilla? Esta acción no se puede deshacer.';
+$string['template_issued']          = 'emitidas';
+$string['template_name']            = 'Nombre de la insignia';
+$string['template_type']            = 'Tipo de insignia';
+$string['template_description']     = 'Descripción';
+$string['template_description_help'] = 'Descripción del logro que representa esta insignia. Aparecerá en el certificado PDF.';
+$string['template_criteria']        = 'Criterios';
+$string['template_criteria_help']   = 'Explica qué debe hacer el estudiante para merecer esta insignia.';
+$string['template_image_url']       = 'URL de imagen (opcional)';
+$string['template_scope']           = 'Alcance';
+$string['template_scope_help']      = 'Global: disponible para cualquier curso (solo admin). Curso: solo para tu curso.';
+$string['template_scope_global']    = 'Global (todos los cursos)';
+$string['template_scope_course']    = 'Este curso';
+$string['badge_award_btn']          = 'Otorgar insignia';
+
+// ── Award badge ───────────────────────────────────────────────────────────────
+$string['award_badge_title']      = 'Otorgar Insignia';
+$string['award_select_template']  = 'Plantilla de insignia';
+$string['award_select_students']  = 'Estudiantes';
+$string['award_select_students_help'] = 'Mantén Ctrl (o Cmd en Mac) para seleccionar varios estudiantes a la vez.';
+$string['award_notes']            = 'Nota interna (opcional)';
+$string['award_btn']              = 'Otorgar insignia';
+$string['award_success']          = 'Se otorgaron {$a} insignia(s) correctamente.';
+$string['award_none_issued']      = 'No se emitió ninguna insignia. Verifica los datos.';
+$string['award_no_templates']     = 'No tienes plantillas disponibles. Crea una primero.';
+$string['award_no_students']      = 'No hay estudiantes matriculados con los permisos necesarios.';
+
+// ── Insignias: panel de otorgamiento (v0.4.0) ─────────────────────────────────
+$string['badge_award_title']          = 'Otorgar insignias';
+$string['badge_award_new']            = 'Otorgar una nueva insignia';
+$string['badge_award_student']        = 'Estudiante';
+$string['badge_award_select_student'] = 'Selecciona un estudiante';
+$string['badge_award_type']           = 'Tipo de insignia';
+$string['badge_award_select_type']    = 'Selecciona un tipo';
+$string['badge_award_btn']            = 'Otorgar';
+$string['badge_awarded_ok']           = 'Insignia otorgada exitosamente.';
+$string['badge_already_has']          = 'Este estudiante ya tiene esta insignia en el curso.';
+$string['badge_revoked_ok']           = 'Insignia revocada.';
+$string['badge_revoke_btn']           = 'Revocar';
+$string['badge_revoke_confirm']       = '¿Revocar esta insignia? Esta acción no se puede deshacer.';
+$string['badge_awarded_list']         = 'Insignias otorgadas en este curso';
+$string['badge_none_awarded_yet']     = 'Todavía no hay insignias otorgadas en este curso.';
+$string['badge_no_types_warning']     = 'No hay tipos de insignia configurados. Ve al panel de administración para crear tipos primero.';
+$string['badge_col_badge']            = 'Insignia';
+$string['badge_col_student']          = 'Estudiante';
+$string['badge_col_verify']           = 'Verificar';
+
+$string['badge_types_menu'] = 'MeritCoin – Tipos de insignia';
+
+// ── Badge types admin (badge_types.php) ───────────────────────────────────────
+$string['badge_types_title']           = 'MeritCoin – Tipos de insignia';
+$string['badge_types_desc']            = 'Crea y administra los tipos de insignias que los profesores pueden otorgar a los estudiantes.';
+$string['badge_types_list']            = 'Tipos de insignia configurados';
+$string['badge_types_empty']           = 'Aún no hay tipos de insignia configurados. Crea uno para comenzar.';
+$string['badge_type_new']              = 'Nuevo tipo de insignia';
+$string['badge_type_edit']             = 'Editar tipo de insignia';
+$string['badge_type_name']             = 'Nombre';
+$string['badge_type_shortname']        = 'Nombre corto';
+$string['badge_type_shortname_help']   = 'Identificador único, solo letras y números. No se puede cambiar en tipos del sistema.';
+$string['badge_type_shortname_exists'] = 'Ya existe un tipo de insignia con ese nombre corto.';
+$string['badge_type_description']      = 'Descripción';
+$string['badge_type_criteria']         = 'Criterios de otorgamiento';
+$string['badge_type_color']            = 'Color';
+$string['badge_type_icon']             = 'Ícono';
+$string['badge_type_image_url']        = 'URL de imagen';
+$string['badge_type_sortorder']        = 'Orden';
+$string['badge_type_enabled']          = 'Habilitado';
+$string['badge_type_created']          = 'Tipo de insignia creado exitosamente.';
+$string['badge_type_updated']          = 'Tipo de insignia actualizado exitosamente.';
+$string['badge_type_deleted']          = 'Tipo de insignia eliminado.';
+$string['badge_type_toggled']          = 'Estado del tipo de insignia actualizado.';
+$string['badge_type_delete_confirm']   = '¿Eliminar este tipo de insignia? Esta acción no se puede deshacer.';
