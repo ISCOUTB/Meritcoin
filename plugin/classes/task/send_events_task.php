@@ -1,6 +1,4 @@
 <?php
-// This file is part of Moodle - [http://moodle.org/](http://moodle.org/)
-//
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
@@ -245,7 +243,7 @@ class send_events_task extends \core\task\scheduled_task {
         $earning->event_type = $record->event_type;
         $earning->coins_earned = $coins;
         $earning->coin_symbol = $payload['coin_symbol'] ?? 'MRT';
-        $earning->timecreated = time();
+        $earning->timecreated = (int)$record->timecreated;
 
         $DB->insert_record('local_meritcoin_earnings', $earning);
 
