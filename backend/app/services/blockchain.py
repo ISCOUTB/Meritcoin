@@ -12,6 +12,7 @@ sea posible. El health check refleja el estado real de conexión.
 """
 
 import logging
+import asyncio
 from typing import Optional
 
 from web3 import Web3
@@ -119,6 +120,7 @@ class BlockchainService:
         self._account = None
         self.badges_contract = None
         self.mrt_contract = None
+        self._tx_lock = asyncio.Lock()
 
         # La cuenta y los contratos se inicializan solo si la configuración
         # está presente. Así el backend arranca aunque falten las variables.
@@ -165,42 +167,33 @@ class BlockchainService:
                 "no se pueden firmar transacciones"
             )
 
-    def _send_tx(self, tx_func) -> str:
-        """
-        Construye, firma, envía una transacción y espera el receipt.
-
-        Usa estimate_gas con fallback a _GAS_FALLBACK para no desperdiciar
-        gas ni fallar por límite insuficiente.
-
-        Retorna el tx_hash como string hex.
-        """
+    async def _send_tx(self, tx_func) -> str:
         self._require_account()
 
-        # Estimar gas; si falla (contrato no disponible, red caída) usar fallback
-        try:
-            gas = tx_func.estimate_gas({"from": self._account.address})
-            # Añadir 20% de margen sobre el estimado
-            gas = int(gas * 1.2)
-        except Exception as exc:
-            logger.warning("estimate_gas falló (%s), usando fallback %d", exc, _GAS_FALLBACK)
-            gas = _GAS_FALLBACK
+        async with self._tx_lock:
+            try:
+                gas = tx_func.estimate_gas({"from": self._account.address})
+                gas = int(gas * 1.2)
+            except Exception as exc:
+                logger.warning("estimate_gas falló (%s), usando fallback %d", exc, _GAS_FALLBACK)
+                gas = _GAS_FALLBACK
 
-        tx = tx_func.build_transaction({
-            "from": self._account.address,
-            "nonce": self.w3.eth.get_transaction_count(self._account.address),
-            "gas": gas,
-            "gasPrice": self.w3.eth.gas_price,
-        })
+            tx = tx_func.build_transaction({
+                "from": self._account.address,
+                "nonce": self.w3.eth.get_transaction_count(self._account.address),
+                "gas": gas,
+                "gasPrice": self.w3.eth.gas_price,
+            })
 
-        signed = self._account.sign_transaction(tx)
-        tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=_TX_TIMEOUT)
+            signed = self._account.sign_transaction(tx)
+            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=_TX_TIMEOUT)
 
-        return receipt.transactionHash.hex()
+            return receipt.transactionHash.hex()
 
     # ── Badges (ERC-1155) ─────────────────────────────────────────────────────
 
-    def mint_badge(self, to: str, badge_id: int, uri: str) -> str:
+    async def mint_badge(self, to: str, badge_id: int, uri: str) -> str:
         """
         Emite una insignia ERC-1155 al wallet del estudiante.
 
@@ -233,7 +226,7 @@ class BlockchainService:
 
     # ── MRT (ERC-20) ──────────────────────────────────────────────────────────
 
-    def mint_mrt(self, to: str, amount: float) -> str:
+    async def mint_mrt(self, to: str, amount: float) -> str:
         """
         Acuña tokens MRT al wallet del estudiante.
 
@@ -258,7 +251,7 @@ class BlockchainService:
         logger.info("%.4f MRT acuñados a %s — tx: %s", amount, to, tx_hash)
         return tx_hash
 
-    def burn_mrt(self, from_addr: str, amount: float) -> str:
+    async def burn_mrt(self, from_addr: str, amount: float) -> str:
         """
         Quema tokens MRT de un wallet al canjear en el marketplace.
 

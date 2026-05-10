@@ -55,7 +55,7 @@ async def spend_tokens(data: SpendRequest) -> SpendResponse:
         )
 
     try:
-        tx_hash = blockchain.burn_mrt(data.student_wallet, data.amount)
+        tx_hash = await blockchain.burn_mrt(data.student_wallet, data.amount)
         logger.info(
             "MRT canjeados — student=%s wallet=%s amount=%.4f tx=%s",
             data.student_id, data.student_wallet, data.amount, tx_hash,

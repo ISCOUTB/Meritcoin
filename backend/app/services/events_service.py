@@ -58,7 +58,7 @@ async def process_event(db: AsyncSession, event: AcademicEvent) -> EventResponse
     try:
         # ── 2. Mint MRT ───────────────────────────────────────────────────────
         if has_wallet and mrt_amount > 0:
-            tx_mrt = blockchain.mint_mrt(wallet, mrt_amount)
+            tx_mrt = await blockchain.mint_mrt(wallet, mrt_amount)
             logger.info(
                 "Mint MRT exitoso: event_id=%s wallet=%s amount=%.4f tx=%s",
                 event.event_id, wallet, mrt_amount, tx_mrt,
