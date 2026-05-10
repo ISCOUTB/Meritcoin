@@ -188,3 +188,6 @@ besu/QBFT-Network/Node-*/data/caches/
 besu/QBFT-Network/Node-*/data/*.networks
 besu/QBFT-Network/Node-*/data/*.ports
 besu/QBFT-Network/Node-*/data/*.cache
+# Besu node keys (private keys of validator nodes)
+besu/QBFT-Network/networkFiles/keys/
+besu/QBFT-Network/Node-*/data/
