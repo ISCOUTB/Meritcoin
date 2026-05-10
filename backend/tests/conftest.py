@@ -6,7 +6,7 @@ y mockea la blockchain para no necesitar Hardhat corriendo.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
