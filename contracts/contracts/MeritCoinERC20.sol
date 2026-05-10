@@ -28,6 +28,7 @@ contract MeritCoinERC20 is ERC20Pausable, AccessControl {
     constructor(address admin) ERC20("MeritCoin", "MRT") {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(MINTER_ROLE, admin);
+        _grantRole(BURNER_ROLE, admin); 
     }
 
     // ── Mint ────────────────────────────────────────────────────────────
@@ -50,5 +51,23 @@ contract MeritCoinERC20 is ERC20Pausable, AccessControl {
 
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
+    }
+
+    // ── Burn ────────────────────────────────────────────────────────────
+
+    /// @notice Rol que permite quemar tokens (para canjes en el marketplace)
+    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+
+    /// @dev Emitido al quemar tokens
+    event TokensBurned(address indexed from, uint256 amount);
+
+    /**
+     * @notice Quema tokens MRT de un estudiante al canjear una recompensa.
+     * @param from   Wallet del estudiante
+     * @param amount Cantidad de MRT a quemar (en wei, 18 decimales)
+     */
+    function burnFrom(address from, uint256 amount) external onlyRole(BURNER_ROLE) {
+        _burn(from, amount);
+        emit TokensBurned(from, amount);
     }
 }
