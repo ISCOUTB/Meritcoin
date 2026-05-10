@@ -181,3 +181,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 >>>>>>> 84214f7b62dd8b58eaf58c9138017ad5e363f29c
+
+# Besu data directories (generated files)
+besu/QBFT-Network/Node-*/data/database/
+besu/QBFT-Network/Node-*/data/caches/
+besu/QBFT-Network/Node-*/data/*.networks
+besu/QBFT-Network/Node-*/data/*.ports
+besu/QBFT-Network/Node-*/data/*.cache

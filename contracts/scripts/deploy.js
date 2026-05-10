@@ -29,14 +29,20 @@ async function main() {
 
   // ── 1. MeritBadges1155 ──────────────────────────────────────────────
   const Badges = await hre.ethers.getContractFactory("MeritBadges1155");
-  const badges = await Badges.deploy(deployer.address);
+  const badges = await Badges.deploy(deployer.address, {
+    gasLimit: 8000000,
+    gasPrice: 1000
+  });
   await badges.waitForDeployment();
   const badgesAddr = await badges.getAddress();
   console.log("MeritBadges1155 desplegado en:", badgesAddr);
 
   // ── 2. MeritCoinERC20 ──────────────────────────────────────────────
   const Token = await hre.ethers.getContractFactory("MeritCoinERC20");
-  const token = await Token.deploy(deployer.address);
+  const token = await Token.deploy(deployer.address, {
+    gasLimit: 8000000,
+    gasPrice: 1000
+  });
   await token.waitForDeployment();
   const tokenAddr = await token.getAddress();
   console.log("MeritCoinERC20  desplegado en:", tokenAddr);
