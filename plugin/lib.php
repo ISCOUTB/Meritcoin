@@ -11,31 +11,18 @@ require_once($CFG->libdir . '/filelib.php');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function local_meritcoin_extend_navigation(global_navigation $nav) {
-    global $USER;
-
     if (!isloggedin() || isguestuser()) {
         return;
     }
 
-    $courses = enrol_get_users_courses($USER->id, true);
-    foreach ($courses as $course) {
-        $ctx = context_course::instance($course->id);
-        if (has_capability('local/meritcoin:managerewards', $ctx) ||
-            has_capability('local/meritcoin:manage_rules', $ctx)) {
-            return;
-        }
-    }
-
-    $node = navigation_node::create(
+    $nav->add_node(navigation_node::create(
         get_string('pluginname', 'local_meritcoin'),
         new moodle_url('/local/meritcoin/dashboard.php'),
         navigation_node::TYPE_CUSTOM,
         null,
         'local_meritcoin_primary',
         new pix_icon('i/badge', get_string('pluginname', 'local_meritcoin'))
-    );
-
-    $nav->add_node($node);
+    ));
 }
 
 function local_meritcoin_extend_navigation_user_settings($nav, $context) {
@@ -249,19 +236,8 @@ function local_meritcoin_status_badge(string $status): string {
 }
 
 function local_meritcoin_render_navbar_output(\renderer_base $renderer) {
-    global $USER;
-
     if (!isloggedin() || isguestuser()) {
         return '';
-    }
-
-    $courses = enrol_get_users_courses($USER->id, true);
-    foreach ($courses as $course) {
-        $ctx = context_course::instance($course->id);
-        if (has_capability('local/meritcoin:managerewards', $ctx) ||
-            has_capability('local/meritcoin:manage_rules', $ctx)) {
-            return '';
-        }
     }
 
     $url = new moodle_url('/local/meritcoin/dashboard.php');
