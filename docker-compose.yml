@@ -102,7 +102,7 @@ services:
       - meritcoin-net
 
   # ── Backend FastAPI (MeritCoin) ─────────────────────────────────────────
-    backend:
+  backend:
     build: ./backend
     container_name: meritcoin-backend
     restart: unless-stopped
