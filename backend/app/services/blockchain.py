@@ -136,7 +136,7 @@ class BlockchainService:
         })
         signed = self.account.sign_transaction(tx)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
         return receipt
 
     def mint_badge(self, to: str, badge_id: int, uri: str) -> str:
