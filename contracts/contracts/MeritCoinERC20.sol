@@ -16,22 +16,34 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
  */
 contract MeritCoinERC20 is ERC20Pausable, AccessControl {
 
+    // ── Roles ────────────────────────────────────────────────────────────
+
     /// @notice Rol que permite acuñar tokens
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
+    /// @notice Rol que permite quemar tokens (para canjes en el marketplace)
+    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+
+    // ── Eventos ──────────────────────────────────────────────────────────
 
     /// @dev Emitido al acuñar tokens
     event TokensMinted(address indexed to, uint256 amount);
 
+    /// @dev Emitido al quemar tokens
+    event TokensBurned(address indexed from, uint256 amount);
+
+    // ── Constructor ──────────────────────────────────────────────────────
+
     /**
-     * @param admin Dirección que recibe DEFAULT_ADMIN_ROLE y MINTER_ROLE.
+     * @param admin Dirección que recibe DEFAULT_ADMIN_ROLE, MINTER_ROLE y BURNER_ROLE.
      */
     constructor(address admin) ERC20("MeritCoin", "MRT") {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(MINTER_ROLE, admin);
-        _grantRole(BURNER_ROLE, admin); 
+        _grantRole(BURNER_ROLE, admin);
     }
 
-    // ── Mint ────────────────────────────────────────────────────────────
+    // ── Mint ─────────────────────────────────────────────────────────────
 
     /**
      * @notice Acuña tokens MRT a un estudiante como recompensa.
@@ -43,7 +55,7 @@ contract MeritCoinERC20 is ERC20Pausable, AccessControl {
         emit TokensMinted(to, amount);
     }
 
-    // ── Pausar / Despausar ──────────────────────────────────────────────
+    // ── Pausar / Despausar ───────────────────────────────────────────────
 
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause();
@@ -53,13 +65,7 @@ contract MeritCoinERC20 is ERC20Pausable, AccessControl {
         _unpause();
     }
 
-    // ── Burn ────────────────────────────────────────────────────────────
-
-    /// @notice Rol que permite quemar tokens (para canjes en el marketplace)
-    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
-
-    /// @dev Emitido al quemar tokens
-    event TokensBurned(address indexed from, uint256 amount);
+    // ── Burn ─────────────────────────────────────────────────────────────
 
     /**
      * @notice Quema tokens MRT de un estudiante al canjear una recompensa.

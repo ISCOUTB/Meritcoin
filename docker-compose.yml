@@ -102,20 +102,26 @@ services:
       - meritcoin-net
 
   # ── Backend FastAPI (MeritCoin) ─────────────────────────────────────────
-  backend:
-    build: ./backend          
+    backend:
+    build: ./backend
     container_name: meritcoin-backend
     restart: unless-stopped
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./backend:/app        
+      - ./backend:/app
     ports:
       - "8000:8000"
     env_file:
-      - ./backend/.env        
+      - ./backend/.env
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - meritcoin-net
 
