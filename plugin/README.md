@@ -37,10 +37,27 @@ plugin/
 ├── lang/
 │   ├── en/local_meritcoin.php   # Strings en inglés
 │   └── es/local_meritcoin.php   # Strings en español
-├── settings.php              # Página de configuración admin
-├── admin_pilot_courses.php   # Panel admin: gestión de cursos piloto
-├── lib.php                   # Funciones auxiliares y hooks de navegación
-└── version.php               # Metadatos del plugin
+├── styles/
+│   └── dashboard.css             # Estilos del dashboard del estudiante
+├── admin_marketplace.php         # Panel global del admin: todos los canjes
+├── admin_pilot_courses.php       # Panel admin: gestión de cursos piloto
+├── award_badge.php               # Interfaz para otorgar insignias manualmente a estudiantes
+├── badge_award.php               # Vista de insignias otorgadas en un curso
+├── badge_pdf.php                 # Generación de certificado PDF de una insignia
+├── badge_templates.php           # Gestión de plantillas de insignias por curso
+├── badge_types.php               # Gestión de tipos/categorías de insignias
+├── badge_verify.php              # Verificación pública de insignias (Open Badges v2)
+├── dashboard.php                 # Dashboard del estudiante (saldo MRT + insignias)
+├── edit_badge_template.php       # Crear/editar plantilla de insignia
+├── editrule.php                  # Crear / editar una regla de recompensa
+├── lib.php                       # Funciones auxiliares y hooks de navegación
+├── manage.php                    # Gestión de reglas por curso (profesor)
+├── marketplace.php               # Mercado de recompensas (estudiante)
+├── rewards.php                   # Gestión de recompensas del curso (profesor)
+├── settings.php                  # Página de configuración admin
+├── tasks.php                     # Registro auxiliar de tareas (raíz del plugin)
+├── teacher_transactions.php      # Informe del profesor: transacciones por curso
+└── version.php                   # Metadatos del plugin
 ```
 
 ## Flujo de funcionamiento
@@ -132,6 +149,21 @@ Si el curso **no es piloto**, el observer sigue leyendo la wallet del campo
 de perfil de usuario (campo `wallet` por defecto). Ambos modos son compatibles
 y pueden coexistir en el mismo Moodle.
 
+## Sistema de insignias
+
+El plugin incluye un sistema completo de insignias personalizadas independiente
+del sistema de badges nativo de Moodle.
+
+| Archivo | Función |
+|---------|---------|
+| `badge_types.php` | Define categorías globales de insignias (Ej: "Excelencia", "Participación") |
+| `badge_templates.php` | Plantillas de insignias por curso (imagen, nombre, descripción) |
+| `edit_badge_template.php` | Formulario para crear o editar una plantilla |
+| `award_badge.php` | El profesor otorga manualmente una insignia a un estudiante |
+| `badge_award.php` | Vista de las insignias otorgadas en un curso |
+| `badge_pdf.php` | Genera un certificado PDF descargable para una insignia recibida |
+| `badge_verify.php` | Página pública de verificación de insignia (compatible Open Badges v2) |
+
 ## Tablas de la base de datos
 
 ### `local_meritcoin_queue` — cola de eventos pendientes
@@ -154,7 +186,7 @@ y pueden coexistir en el mismo Moodle.
 | `timecreated`    | int            | Timestamp de creación                           |
 | `timemodified`   | int            | Timestamp de última actualización               |
 
-### `local_meritcoin_pilot_courses` — cursos piloto (NEW v0.5.1)
+### `local_meritcoin_pilot_courses` — cursos piloto (v0.5.1)
 
 | Campo           | Tipo        | Descripción                                            |
 |-----------------|-------------|--------------------------------------------------------|
@@ -165,7 +197,7 @@ y pueden coexistir en el mismo Moodle.
 | `created_by`    | int         | ID del admin que configuró el piloto                   |
 | `created_at`    | int         | Timestamp de creación                                  |
 
-### `local_meritcoin_wallets` — caché de wallets custodiales (NEW v0.5.1)
+### `local_meritcoin_wallets` — caché de wallets custodiales (v0.5.1)
 
 | Campo             | Tipo        | Descripción                                         |
 |-------------------|-------------|-----------------------------------------------------|
@@ -275,20 +307,24 @@ actividad **una sola vez**, aunque la nota sea corregida posteriormente.
 ## Tareas programadas
 
 | Tarea                       | Frecuencia    | Función                                            |
-|-----------------------------|---------------|----------------------------------------------------|
-| `send_events_task`          | Cada minuto   | Envía eventos `pending` al backend                 |
-| `process_redemptions_task`  | Cada minuto   | Procesa canjes `pending` del marketplace           |
-| `expire_courses_task`       | Diaria (2 AM) | Cierra enrollments de cursos piloto vencidos       |
+|-----------------------------|---------------|-----------------------------------------------------|
+| `send_events_task`          | Cada minuto   | Envía eventos `pending` al backend                  |
+| `process_redemptions_task`  | Cada minuto   | Procesa canjes `pending` del marketplace            |
+| `expire_courses_task`       | Diaria (2 AM) | Cierra enrollments de cursos piloto vencidos        |
 
 ### Ejecutar manualmente (útil en pruebas)
 
 ```bash
 # Ejecutar todas las tareas del cron
-docker exec -it meritcoin-moodle-1 php //bitnami/moodle/admin/cli/cron.php
+docker exec -it meritcoin-moodle php //bitnami/moodle/admin/cli/cron.php
 
 # Ejecutar solo send_events_task
 docker exec meritcoin-moodle php /bitnami/moodle/admin/cli/scheduled_task.php \
   --execute='\local_meritcoin\task\send_events_task'
+
+# Ejecutar solo process_redemptions_task
+docker exec meritcoin-moodle php /bitnami/moodle/admin/cli/scheduled_task.php \
+  --execute='\local_meritcoin\task\process_redemptions_task'
 
 # Ejecutar solo expire_courses_task
 docker exec meritcoin-moodle php /bitnami/moodle/admin/cli/scheduled_task.php \
