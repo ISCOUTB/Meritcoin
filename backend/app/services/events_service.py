@@ -46,6 +46,11 @@ async def process_event(db: AsyncSession, event: AcademicEvent) -> EventResponse
     mrt_amount = float(event.coins_amount or 0)
     if mrt_amount <= 0:
         mrt_amount = float(tokens_service.calculate_mrt_reward(event))
+        logger.warning(
+            "coins_amount ausente o cero en evento %s — usando fallback local (%.4f MRT). "
+            "Verificar reglas del plugin.",
+            event.event_id, mrt_amount,
+        )
 
     # ── 2-5. Mint + auditoría (con rollback total si algo falla) ──────────────
     tx_mrt: str | None = None
@@ -88,7 +93,7 @@ async def process_event(db: AsyncSession, event: AcademicEvent) -> EventResponse
         await db.rollback()
         # mark_event_failed abre su propia sesión/commit para no depender
         # del estado actual (posiblemente inválido) de la sesión rollbackeada
-        await audit_service.mark_event_failed(db, event.event_id, str(exc))
+        await audit_service.mark_event_failed(event.event_id, str(exc))
         logger.error(
             "Error procesando evento %s: %s",
             event.event_id, exc,

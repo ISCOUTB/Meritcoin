@@ -108,7 +108,7 @@ async def mark_event_processed(db: AsyncSession, event_id: str) -> None:
     logger.info("Evento %s marcado como processed", event_id)
 
 
-async def mark_event_failed(db: AsyncSession, event_id: str, error: str) -> None:
+async def mark_event_failed(event_id: str, error: str) -> None:
     """
     Marca un EventRecord como fallido usando una sesión independiente.
 
