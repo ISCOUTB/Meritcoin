@@ -338,3 +338,21 @@ $string['badge_type_delete_confirm']   = '¿Eliminar este tipo de insignia? Esta
 $string['student_course_limit']          = 'Límite de MRT por estudiante por curso';
 $string['student_course_limit_desc']     = 'Máximo de tokens MRT que un estudiante puede ganar por curso durante todo el semestre.';
 $string['student_course_limit_exceeded'] = 'Este estudiante ha alcanzado el límite de MRT para este curso ({$a->used}/{$a->limit}).';
+
+// ── Wallets custodiales / Cursos piloto (v0.5.0) ──────────────────────────
+$string['pilotcourses']             = 'Cursos Piloto';
+$string['addpilotcourse']           = 'Añadir curso piloto';
+$string['choosecourse']             = 'Elige un curso...';
+$string['expiresatoverride']        = 'Fecha de cierre del semestre (manual)';
+$string['expiresatoverridedesc']    = 'Dejar vacío para usar automáticamente la fecha de fin del curso.';
+$string['pilotadded']               = 'Curso añadido como piloto correctamente.';
+$string['pilotalreadyexists']       = 'Este curso ya está registrado como piloto.';
+$string['expiresatupdated']         = 'Fecha de cierre actualizada correctamente.';
+$string['pilotdisabled']            = 'Curso piloto desactivado.';
+$string['nopilotcourses']           = 'No hay cursos piloto configurados todavía.';
+$string['usescourseenddate']        = 'Usa la fecha de fin del curso';
+$string['courseenddate']            = 'Fecha de fin del curso';
+$string['noenddate']                = 'Sin fecha de fin';
+$string['disabled']                 = 'Desactivado';
+$string['confirmdisablepilot']      = '¿Seguro que quieres desactivar este curso piloto?';
+$string['task_expire_courses']      = 'Expirar inscripciones de cursos piloto MeritCoin';
