@@ -50,5 +50,10 @@ class Settings(BaseSettings):
     # ── CORS ─────────────────────────────────────────────────────────────────
     cors_origins: List[str] = ["*"]
 
+    # ── Wallets custodiales ───────────────────────────────────────────────────────
+    # Generar con: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # OBLIGATORIO si se usa el sistema de wallets custodiales.
+    wallet_encryption_key: str = ""
+
 
 settings = Settings()

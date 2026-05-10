@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.services.blockchain import blockchain
 
+from app.api.wallets import router as wallets_router
+
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -60,7 +62,7 @@ app.include_router(events.router)
 app.include_router(students.router)
 app.include_router(badges.router)
 app.include_router(tokens.router)
-
+app.include_router(wallets_router)
 
 @app.get("/health", tags=["System"])
 async def health_check():
