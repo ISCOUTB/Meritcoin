@@ -334,4 +334,4 @@ $string['badge_type_created']          = 'Tipo de insignia creado exitosamente.'
 $string['badge_type_updated']          = 'Tipo de insignia actualizado exitosamente.';
 $string['badge_type_deleted']          = 'Tipo de insignia eliminado.';
 $string['badge_type_toggled']          = 'Estado del tipo de insignia actualizado.';
-$string['badge_type_delete_confirm']   = '¿Eliminar este tipo de insignia? Esta acción no se puede deshacer.';
+$string['badge_type_delete_confirm']   = '¿Eliminar este tipo de insignia? Esta acción no se puede deshacer.';$string['task_process_redemptions'] = 'Procesar canjes pendientes del marketplace';

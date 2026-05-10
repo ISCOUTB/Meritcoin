@@ -354,4 +354,4 @@ $string['badge_type_created']          = 'Badge type created successfully.';
 $string['badge_type_updated']          = 'Badge type updated successfully.';
 $string['badge_type_deleted']          = 'Badge type deleted.';
 $string['badge_type_toggled']          = 'Badge type status updated.';
-$string['badge_type_delete_confirm']   = 'Delete this badge type? This action cannot be undone.';
+$string['badge_type_delete_confirm']   = 'Delete this badge type? This action cannot be undone.';$string['task_process_redemptions'] = 'Process pending marketplace redemptions';

@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+
 /**
  * Scheduled tasks for local_meritcoin.
  *
@@ -35,7 +36,9 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+
 defined('MOODLE_INTERNAL') || die();
+
 
 $tasks = [
     [
@@ -46,6 +49,18 @@ $tasks = [
         // pendientes en la cola. Si la cola está vacía, termina inmediatamente.
         'blocking'  => 0,        // No bloquea otras tareas del cron.
         'minute'    => '*',      // Cada minuto.
+        'hour'      => '*',
+        'day'       => '*',
+        'month'     => '*',
+        'dayofweek' => '*',
+    ],
+    [
+        'classname' => '\local_meritcoin\task\process_redemptions_task',
+
+        // Procesa canjes pendientes (quema tokens en blockchain).
+        // Se ejecuta cada 2 minutos para evitar sobrecargar el backend.
+        'blocking'  => 0,
+        'minute'    => '*/2',    // Cada 2 minutos.
         'hour'      => '*',
         'day'       => '*',
         'month'     => '*',
