@@ -66,4 +66,14 @@ $tasks = [
         'month'     => '*',
         'dayofweek' => '*',
     ],
+
+    [
+        'classname'   => '\local_meritcoin\task\expire_courses_task',
+        'blocking'    => 0,
+        'minute'      => '0',
+        'hour'        => '2',       // 2 AM diariamente
+        'day'         => '*',
+        'month'       => '*',
+        'dayofweek'   => '*',
+    ],
 ];

@@ -538,7 +538,40 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026051001, 'local', 'meritcoin');
     }
 
-    return true;
+    if ($oldversion < 2026051002) {
+        $dbman = $DB->get_manager();
+
+        // Tabla pilot_courses
+        $table = new xmldb_table('local_meritcoin_pilot_courses');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id',            XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+            $table->add_field('courseid',      XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+            $table->add_field('pilot_enabled', XMLDB_TYPE_INTEGER, '1',  null, XMLDB_NOTNULL, null, '1');
+            $table->add_field('groupid',       XMLDB_TYPE_INTEGER, '10');
+            $table->add_field('expires_at',    XMLDB_TYPE_INTEGER, '10');
+            $table->add_field('created_by',    XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+            $table->add_field('created_at',    XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+            $table->add_key('primary',    XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('uq_courseid', XMLDB_KEY_UNIQUE, ['courseid']);
+            $dbman->create_table($table);
+        }
+
+        // Tabla wallets (caché local)
+        $table = new xmldb_table('local_meritcoin_wallets');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id',             XMLDB_TYPE_INTEGER, '10',  null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+            $table->add_field('userid',         XMLDB_TYPE_INTEGER, '10',  null, XMLDB_NOTNULL);
+            $table->add_field('wallet_address', XMLDB_TYPE_CHAR,    '42',  null, XMLDB_NOTNULL);
+            $table->add_field('status',         XMLDB_TYPE_CHAR,    '20',  null, XMLDB_NOTNULL, null, 'active');
+            $table->add_field('provisioned_at', XMLDB_TYPE_INTEGER, '10',  null, XMLDB_NOTNULL);
+            $table->add_key('primary',   XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('uq_userid', XMLDB_KEY_UNIQUE,  ['userid']);
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026051001, 'local', 'meritcoin');
+    }
 
     return true;
+
 }

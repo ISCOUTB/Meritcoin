@@ -365,5 +365,35 @@
       </INDEXES>
     </TABLE>
 
+    <TABLE NAME="local_meritcoin_pilot_courses" COMMENT="Cursos marcados como piloto MeritCoin">
+       <FIELDS>
+         <FIELD NAME="id"            TYPE="int"  LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+         <FIELD NAME="courseid"      TYPE="int"  LENGTH="10" NOTNULL="true"/>
+         <FIELD NAME="pilot_enabled" TYPE="int"  LENGTH="1"  NOTNULL="true" DEFAULT="1"/>
+         <FIELD NAME="groupid"       TYPE="int"  LENGTH="10" NOTNULL="false"/>
+         <FIELD NAME="expires_at"    TYPE="int"  LENGTH="10" NOTNULL="false"/>
+         <FIELD NAME="created_by"    TYPE="int"  LENGTH="10" NOTNULL="true"/>
+         <FIELD NAME="created_at"    TYPE="int"  LENGTH="10" NOTNULL="true"/>
+       </FIELDS>
+       <KEYS>
+         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+         <KEY NAME="uq_courseid" TYPE="unique" FIELDS="courseid"/>
+       </KEYS>
+    </TABLE>
+
+    <TABLE NAME="local_meritcoin_wallets" COMMENT="Caché local de wallets custodiales">
+       <FIELDS>
+         <FIELD NAME="id"             TYPE="int"  LENGTH="10"  NOTNULL="true" SEQUENCE="true"/>
+         <FIELD NAME="userid"         TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+         <FIELD NAME="wallet_address" TYPE="char" LENGTH="42"  NOTNULL="true"/>
+         <FIELD NAME="status"         TYPE="char" LENGTH="20"  NOTNULL="true" DEFAULT="active"/>
+         <FIELD NAME="provisioned_at" TYPE="int"  LENGTH="10"  NOTNULL="true"/>
+       </FIELDS>
+       <KEYS>
+         <KEY NAME="primary"  TYPE="primary" FIELDS="id"/>
+         <KEY NAME="uq_userid" TYPE="unique" FIELDS="userid"/>
+       </KEYS>
+    </TABLE>
+
   </TABLES>
 </XMLDB>
