@@ -123,27 +123,26 @@ class observer {
             return;
         }
 
-        // ── 2. Wallet del estudiante ─────────────────────────────────────────
-        $walletfield = get_config('local_meritcoin', 'wallet_field') ?: 'wallet';
+        // ── 2. Wallet del estudiante (custodial automática si curso es piloto) ────
+        $wallet = wallet_service::get_or_provision($userid, $courseid);
 
-        $fieldid = $DB->get_field('user_info_field', 'id', ['shortname' => $walletfield]);
-        if (!$fieldid) {
-            debugging("MeritCoin: Profile field '{$walletfield}' not found.", DEBUG_DEVELOPER);
-            return;
+        // Fallback: leer wallet manual del perfil si no es curso piloto.
+        if ($wallet === null) {
+            $walletfield = get_config('local_meritcoin', 'wallet_field') ?: 'wallet';
+            $fieldid = $DB->get_field('user_info_field', 'id', ['shortname' => $walletfield]);
+            if ($fieldid) {
+                $wallet = $DB->get_field('user_info_data', 'data', [
+                    'userid'  => $userid,
+                    'fieldid' => $fieldid,
+                ]) ?: null;
+            }
         }
 
-        $wallet = $DB->get_field('user_info_data', 'data', [
-            'userid'  => $userid,
-            'fieldid' => $fieldid,
-        ]);
-
         $status = 'pending';
-
         if (empty($wallet)) {
             $wallet = null;
             $status = 'pending_wallet';
         } else if (!preg_match('/^0x[0-9a-fA-F]{40}$/', $wallet)) {
-            debugging("MeritCoin: Invalid wallet format for user {$userid}: {$wallet}", DEBUG_DEVELOPER);
             $wallet = null;
             $status = 'pending_wallet';
         }
