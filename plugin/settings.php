@@ -48,9 +48,9 @@ if ($hassiteconfig) {
 
     // ── Límite de emisión de MRT por profesor ─────────────────────────────────
     $settings->add(new admin_setting_configtext(
-        'local_meritcoin/student_limit',
-        get_string('student_limit', 'local_meritcoin'),
-        get_string('student_limit_desc', 'local_meritcoin'),
+        'local_meritcoin/student_course_limit',
+        get_string('student_course_limit', 'local_meritcoin'),
+        get_string('student_course_limit_desc', 'local_meritcoin'),
         16, 
         PARAM_INT
     ));
