@@ -40,7 +40,7 @@ def _criteria_to_str(criteria: Optional[List[str]]) -> Optional[str]:
     return "\n".join(c.strip() for c in criteria if c.strip())
 
 
-def _criteria_from_str(raw: Optional[str]) -> List[str]:
+def criteria_from_str(raw: Optional[str]) -> List[str]:
     """Convierte string de criterios (separado por \n) a lista."""
     if not raw:
         return []
@@ -325,7 +325,7 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
     if data.student_wallet and blockchain.is_connected():
         # ── Mint badge ────────────────────────────────────────────────────────
         try:
-            tx_hash = blockchain.mint_badge(data.student_wallet, badge_id, badge_uri)
+            tx_hash = await blockchain.mint_badge(data.student_wallet, badge_id, badge_uri)
             chain_status = "confirmed"
             logger.info("Badge minteado en blockchain: tx=%s", tx_hash)
         except Exception as exc:
@@ -336,7 +336,7 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
         mrt_reward: Optional[float] = getattr(template, "mrt_reward", None)
         if mrt_reward and float(mrt_reward) > 0:
             try:
-                mrt_tx = blockchain.mint_mrt(data.student_wallet, float(mrt_reward))
+                mrt_tx = await blockchain.mint_mrt(data.student_wallet, float(mrt_reward))
                 logger.info("%.4f MRT acuñados por badge: tx=%s", mrt_reward, mrt_tx)
             except Exception as exc:
                 logger.warning("Error al mintear MRT por badge (no crítico): %s", exc)
@@ -450,7 +450,7 @@ async def get_public_verification(db: AsyncSession, award_id: str) -> PublicVeri
         badge_name=template.name,
         badge_description=template.description,
         badge_image_url=template.image_url,
-        criteria=_criteria_from_str(template.criteria),
+        criteria=criteria_from_str(template.criteria),
         skills=[s.name for s in template.skills],
         issued_by_id=award.issued_by_id,
         issued_by_role=award.issued_by_role,

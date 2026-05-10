@@ -43,7 +43,7 @@ from app.models.badges_schema import (
     SkillResponse,
 )
 from app.services import badges_service
-from app.services.badges_service import _criteria_from_str
+from app.services.badges_service import criteria_from_str
 from app.services.certificate import generate_certificate_pdf
 
 logger = logging.getLogger(__name__)
@@ -124,6 +124,8 @@ async def update_template(
     data: BadgeTemplateUpdate,
     requester_id: str = Query(..., description="ID del usuario que hace la petición"),
     requester_role: str = Query(..., description="Rol: admin | teacher"),
+    # TODO: reemplazar por JWT/token de sesión cuando se implemente autenticación.
+    # Actualmente cualquier cliente puede auto-declararse admin — solo aceptable en desarrollo.
     db: AsyncSession = Depends(get_db),
 ) -> BadgeTemplateResponse:
     return _map_template(
@@ -140,6 +142,8 @@ async def delete_template(
     template_id: str,
     requester_id: str = Query(...),
     requester_role: str = Query(...),
+    # TODO: reemplazar por JWT/token de sesión cuando se implemente autenticación.
+    # Actualmente cualquier cliente puede auto-declararse admin — solo aceptable en desarrollo.
     db: AsyncSession = Depends(get_db),
 ) -> None:
     await badges_service.delete_template(db, template_id, requester_id, requester_role)
@@ -182,6 +186,8 @@ async def revoke_award(
     award_id: str,
     requester_id: str = Query(...),
     requester_role: str = Query(...),
+    # TODO: reemplazar por JWT/token de sesión cuando se implemente autenticación.
+    # Actualmente cualquier cliente puede auto-declararse admin — solo aceptable en desarrollo.
     db: AsyncSession = Depends(get_db),
 ) -> BadgeAwardResponse:
     return _map_award(
@@ -258,7 +264,7 @@ def _map_template(template) -> BadgeTemplateResponse:
         name=template.name,
         description=template.description,
         image_url=template.image_url,
-        criteria=_criteria_from_str(template.criteria),
+        criteria=criteria_from_str(template.criteria),
         skills=[
             SkillResponse(
                 id=skill.id,
