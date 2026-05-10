@@ -2,7 +2,6 @@
 namespace local_meritcoin\task;
 
 defined('MOODLE_INTERNAL') || die();
-require_once($CFG->dirroot . '/local/meritcoin/lib.php');
 
 class process_redemptions_task extends \core\task\scheduled_task {
 
@@ -13,7 +12,7 @@ class process_redemptions_task extends \core\task\scheduled_task {
         return get_string('task_process_redemptions', 'local_meritcoin');
     }
 
-    public function execute(): void {
+        public function execute(): void {
         global $DB;
 
         if (!get_config('local_meritcoin', 'enabled')) {
@@ -21,12 +20,10 @@ class process_redemptions_task extends \core\task\scheduled_task {
             return;
         }
 
-        // Canjes pendientes (sin tx_hash) con intentos restantes
-        // Nota: la tabla no tiene campo 'attempts'; se reintenta siempre.
-        // TODO: agregar campo 'attempts' a local_meritcoin_redemptions en install.xml
+        // Canjes pendientes (sin tx_hash confirmado) con intentos restantes.
         $pending = $DB->get_records_select(
             'local_meritcoin_redemptions',
-            'tx_hash IS NULL',
+            "tx_hash IS NULL AND status != 'failed'",
             [],
             'timecreated ASC',
             '*',
@@ -45,7 +42,6 @@ class process_redemptions_task extends \core\task\scheduled_task {
         $failed    = 0;
 
         foreach ($pending as $r) {
-            // Obtener wallet del estudiante
             $wallet = local_meritcoin_get_user_wallet($r->userid);
             if (empty($wallet)) {
                 mtrace('  Canje ' . $r->id . ': sin wallet para userid=' . $r->userid . ', saltando.');
@@ -53,7 +49,6 @@ class process_redemptions_task extends \core\task\scheduled_task {
                 continue;
             }
 
-            // Verificar que la recompensa aún existe
             $reward = $DB->get_record('local_meritcoin_rewards', ['id' => $r->rewardid]);
             if (!$reward) {
                 mtrace('  Canje ' . $r->id . ': recompensa id=' . $r->rewardid . ' no encontrada.');
@@ -61,9 +56,6 @@ class process_redemptions_task extends \core\task\scheduled_task {
                 continue;
             }
 
-            // ── Construir payload ───────────────────────────────────────
-            // Usar coins_spent (precio al momento del canje),
-            // NO price_mrt (precio actual que puede haber cambiado).
             $payload = json_encode([
                 'student_id'     => (string)$r->userid,
                 'student_wallet' => $wallet,
@@ -72,16 +64,29 @@ class process_redemptions_task extends \core\task\scheduled_task {
                 'course_id'      => (string)$r->courseid,
             ], JSON_UNESCAPED_UNICODE);
 
-            // ── Enviar al backend ───────────────────────────────────────
             $result = $this->call_spend_endpoint($client, $payload);
 
+            $now = time();
+
             if ($result->success) {
-                $txhash = $result->tx_hash ?? 'confirmed';
-                $DB->set_field('local_meritcoin_redemptions', 'tx_hash', $txhash, ['id' => $r->id]);
+                $txhash         = $result->tx_hash ?? 'confirmed';
+                $r->tx_hash     = $txhash;
+                $r->status      = 'confirmed';
+                $r->attempts    = $r->attempts + 1;
+                $r->last_error  = null;
+                $DB->update_record('local_meritcoin_redemptions', $r);
                 mtrace('  Canje ' . $r->id . ' procesado — tx: ' . $txhash);
                 $processed++;
             } else {
-                mtrace('  Canje ' . $r->id . ' fallido: ' . $result->error);
+                $r->attempts   = $r->attempts + 1;
+                $r->last_error = $result->error;
+                if ($r->attempts >= self::MAX_ATTEMPTS) {
+                    $r->status = 'failed';
+                    mtrace('  Canje ' . $r->id . ' FALLIDO permanentemente tras ' . $r->attempts . ' intentos: ' . $result->error);
+                } else {
+                    mtrace('  Canje ' . $r->id . ' fallido (reintentará): ' . $result->error);
+                }
+                $DB->update_record('local_meritcoin_redemptions', $r);
                 $failed++;
             }
         }

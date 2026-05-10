@@ -20,4 +20,4 @@ $plugin->component = 'local_meritcoin';
 $plugin->version   = 2026051001;     // YYYYMMDDXX
 $plugin->requires  = 2023100900;     // Moodle 4.3+
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.5.0';
+$plugin->release   = '0.3.3';

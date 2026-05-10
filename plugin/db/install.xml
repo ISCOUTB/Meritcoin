@@ -199,7 +199,7 @@
       </INDEXES>
     </TABLE>
 
-    <!-- ═══════════════════════════════════════════════════════════════════════
+        <!-- ═══════════════════════════════════════════════════════════════════════
          Historial de canjes del marketplace.
          ═══════════════════════════════════════════════════════════════════════ -->
     <TABLE NAME="local_meritcoin_redemptions" COMMENT="Marketplace redemption history">
@@ -209,7 +209,14 @@
         <FIELD NAME="rewardid"    TYPE="int"    LENGTH="10"  NOTNULL="true"/>
         <FIELD NAME="courseid"    TYPE="int"    LENGTH="10"  NOTNULL="true"/>
         <FIELD NAME="coins_spent" TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="true"/>
-        <FIELD NAME="tx_hash"     TYPE="char"   LENGTH="66"  NOTNULL="false"/>
+        <FIELD NAME="tx_hash"     TYPE="char"   LENGTH="66"  NOTNULL="false"
+               COMMENT="Hash de la transacción blockchain; NULL mientras no se procese"/>
+        <FIELD NAME="status"      TYPE="char"   LENGTH="20"  NOTNULL="true" DEFAULT="pending"
+               COMMENT="pending, confirmed, failed"/>
+        <FIELD NAME="attempts"    TYPE="int"    LENGTH="3"   NOTNULL="true" DEFAULT="0"
+               COMMENT="Intentos de procesamiento en blockchain"/>
+        <FIELD NAME="last_error"  TYPE="text"   NOTNULL="false"
+               COMMENT="Último error del backend al procesar el canje"/>
         <FIELD NAME="timecreated" TYPE="int"    LENGTH="10"  NOTNULL="true"/>
       </FIELDS>
       <KEYS>
@@ -219,6 +226,8 @@
         <INDEX NAME="idx_user"       UNIQUE="false" FIELDS="userid"/>
         <INDEX NAME="idx_reward"     UNIQUE="false" FIELDS="rewardid"/>
         <INDEX NAME="idx_course"     UNIQUE="false" FIELDS="courseid"/>
+        <INDEX NAME="idx_status"     UNIQUE="false" FIELDS="status"
+               COMMENT="Filtra canjes pending en la tarea programada"/>
         <INDEX NAME="uq_user_reward" UNIQUE="true"  FIELDS="userid,rewardid"/>
       </INDEXES>
     </TABLE>

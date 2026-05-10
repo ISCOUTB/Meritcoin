@@ -511,5 +511,34 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026050707, 'local', 'meritcoin');
     }
 
+        // ── v0.3.3: añadir attempts, last_error y status a redemptions ───────────
+    if ($oldversion < 2026051001) {
+        $table = new xmldb_table('local_meritcoin_redemptions');
+
+        $field = new xmldb_field('status', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'pending', 'tx_hash');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('attempts', XMLDB_TYPE_INTEGER, '3', null, XMLDB_NOTNULL, null, '0', 'status');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('last_error', XMLDB_TYPE_TEXT, null, null, false, null, null, 'attempts');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $index = new xmldb_index('idx_status', XMLDB_INDEX_NOTUNIQUE, ['status']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        upgrade_plugin_savepoint(true, 2026051001, 'local', 'meritcoin');
+    }
+
+    return true;
+
     return true;
 }
