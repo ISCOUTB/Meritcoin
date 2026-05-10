@@ -335,3 +335,6 @@ $string['badge_type_updated']          = 'Tipo de insignia actualizado exitosame
 $string['badge_type_deleted']          = 'Tipo de insignia eliminado.';
 $string['badge_type_toggled']          = 'Estado del tipo de insignia actualizado.';
 $string['badge_type_delete_confirm']   = '¿Eliminar este tipo de insignia? Esta acción no se puede deshacer.';$string['task_process_redemptions'] = 'Procesar canjes pendientes del marketplace';
+$string['student_limit_limit'] = 'Límite de MRT por estudiante por curso';
+$string['student_limit_desc'] = 'Máximo de tokens MRT que un estudiante puede ganar por curso durante todo el semestre.';
+$string['student_limit_exceeded'] = 'Este estudiante ha alcanzado el límite de MRT para este curso ({\$a->used}\/{\$a->limit}).';

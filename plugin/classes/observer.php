@@ -170,6 +170,17 @@ class observer {
             return;
         }
 
+        // ── 3b. Verificar límite de MRT por estudiante por curso ─────────────
+        if ($type === 'grade') {
+            $limit = (int)(get_config('local_meritcoin', 'teacher_weekly_limit') ?: 16);
+            $sql = "SELECT COALESCE(SUM(coins_amount), 0) FROM {local_meritcoin_queue} WHERE userid = :uid AND courseid = :cid AND event_type = 'grade'";
+            $already = (float)$DB->get_field_sql($sql, ['uid' => $userid, 'cid' => $courseid]);
+            if ($already + $coins > $limit) {
+                debugging("MeritCoin: Student {$userid} reached MRT limit ({$already}/{$limit}) in course {$courseid}.", DEBUG_DEVELOPER);
+                return;
+            }
+        }
+
         // ── 4. Configuración de moneda del curso ─────────────────────────────
         $coinsymbol = rules_service::get_coin_symbol_for_course($courseid);
         $coinname   = rules_service::get_coin_name_for_course($courseid);
@@ -185,7 +196,7 @@ class observer {
         // ✅ Determinístico: mismo userid + cmid + grade = mismo event_id
         $cmpart  = $cmid ?? 'course';
         $gradepart = $grade !== null ? number_format($grade, 5, '.', '') : 'null';
-        $eventid = 'evt-' . md5("moodle-{$userid}-{$courseid}-{$cmpart}-{$type}-{$gradepart}");
+        $eventid = 'evt-' . md5("moodle-{$userid}-{$courseid}-{$cmpart}-{$type}");
 
         if ($DB->record_exists('local_meritcoin_queue', ['event_id' => $eventid])) {
             return;

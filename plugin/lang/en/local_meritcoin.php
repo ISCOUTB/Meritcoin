@@ -355,3 +355,6 @@ $string['badge_type_updated']          = 'Badge type updated successfully.';
 $string['badge_type_deleted']          = 'Badge type deleted.';
 $string['badge_type_toggled']          = 'Badge type status updated.';
 $string['badge_type_delete_confirm']   = 'Delete this badge type? This action cannot be undone.';$string['task_process_redemptions'] = 'Process pending marketplace redemptions';
+$string['student_limit'] = 'Student MRT limit per course';
+$string['student_limit_desc'] = 'Maximum MRT tokens a student can earn per course during the whole semester.';
+$string['student_limit_exceeded'] = 'This student has reached the MRT limit for this course ({\$a->used}\/{\$a->limit}).';
