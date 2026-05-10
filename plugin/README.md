@@ -1,84 +1,136 @@
-# Plugin MeritCoin para Moodle (local_meritcoin)
+# Plugin MeritCoin para Moodle (`local_meritcoin`)
 
-Plugin local de Moodle que captura eventos academicos (completar cursos y
-calificaciones) y los envia al backend FastAPI firmados con HMAC-SHA256.
+Plugin local de Moodle que captura eventos de calificación, calcula las
+monedas MRT correspondientes según las reglas del curso, y los envía al
+backend FastAPI firmados con HMAC-SHA256.
 
 ## Datos del plugin
 
-| Campo | Valor |
-|-------|-------|
-| Tipo | Plugin local (local_meritcoin) |
-| Version | 0.1.0 (2026031000) |
-| Requiere | Moodle 4.3+ |
-| Madurez | MATURITY_ALPHA |
-| Licencia | GNU GPL v3 |
+| Campo     | Valor                          |
+|-----------|--------------------------------|
+| Tipo      | Plugin local (local_meritcoin) |
+| Versión   | 0.3.3 (2026051001)             |
+| Requiere  | Moodle 4.3+                    |
+| Madurez   | MATURITY_ALPHA                 |
+| Licencia  | GNU GPL v3                     |
 
 ## Estructura
 
 ```
 plugin/
 ├── classes/
-│   ├── observer.php               # Captura eventos de Moodle
-│   ├── api_client.php             # Cliente HTTP con firma HMAC
+│   ├── observer.php                      # Captura eventos de Moodle
+│   ├── api_client.php                    # Cliente HTTP con firma HMAC
+│   ├── rules_service.php                 # Lógica de reglas y cálculo de monedas
 │   └── task/
-│       └── send_events_task.php   # Tarea programada (cron)
+│       ├── send_events_task.php          # Tarea programada: envío de eventos
+│       └── process_redemptions_task.php  # Tarea programada: canjes del marketplace
 ├── db/
-│   ├── install.xml                # Tabla local_meritcoin_queue
-│   ├── upgrade.php                # Migraciones de BD
-│   ├── events.php                 # Suscripcion a eventos de Moodle
-│   ├── tasks.php                  # Registro de tarea programada
-│   └── access.php                 # Capacidades/permisos
+│   ├── install.xml   # Tablas de la BD
+│   ├── upgrade.php   # Migraciones de BD
+│   ├── events.php    # Suscripción a eventos de Moodle
+│   ├── tasks.php     # Registro de tareas programadas
+│   └── access.php    # Capacidades y permisos
 ├── lang/
-│   ├── en/local_meritcoin.php     # Strings en ingles
-│   └── es/local_meritcoin.php     # Strings en espanol
-├── settings.php                   # Pagina de configuracion admin
-├── lib.php                        # Funciones auxiliares
-└── version.php                    # Metadatos del plugin
+│   ├── en/local_meritcoin.php   # Strings en inglés
+│   └── es/local_meritcoin.php   # Strings en español
+├── settings.php   # Página de configuración admin
+├── lib.php        # Funciones auxiliares y hooks de navegación
+└── version.php    # Metadatos del plugin
 ```
 
 ## Flujo de funcionamiento
 
 ```
-Estudiante completa curso o recibe nota
-         │
-         v
-  observer.php captura el evento
-         │
-         v
-  Inserta registro en local_meritcoin_queue
-         │
-         v
-  send_events_task.php (cada 60 segundos)
-         │
-         v
-  api_client.php envia al backend con HMAC
-         │
-         v
-  Backend procesa, acuna badge + MRT
+Estudiante recibe una calificación en una actividad
+                    │
+                    ▼
+        observer.php captura user_graded
+                    │
+                    ▼
+   rules_service calcula monedas MRT según reglas del curso
+   (prioridad: actividad específica > tipo de módulo > curso)
+                    │
+                    ├─ coins = 0 → descarta el evento
+                    │
+                    ▼
+   Inserta registro en local_meritcoin_queue
+   (status = pending | pending_wallet si no tiene wallet)
+                    │
+                    ▼
+   send_events_task.php (cada 60 segundos via cron)
+                    │
+                    ├─ Reactiva pending_wallet si el estudiante ya registró wallet
+                    │
+                    ▼
+   api_client.php envía al backend con firma HMAC-SHA256
+                    │
+                    ├─ OK    → status = sent, registra en local_meritcoin_earnings
+                    └─ Error → attempts++; si attempts >= 5 → status = failed
 ```
 
-### Eventos capturados
+## Eventos capturados
 
-| Evento Moodle | Tipo enviado | Condicion |
-|---------------|-------------|-----------|
-| `\core\event\course_completed` | `completion` | Estudiante completa un curso |
-| `\core\event\user_graded` | `grade` | Se registra calificacion final |
+| Evento Moodle              | Tipo enviado | Condición                                 |
+|----------------------------|--------------|-------------------------------------------|
+| `\core\event\user_graded` | `grade`      | Se registra calificación en una actividad |
 
-### Cola de eventos (local_meritcoin_queue)
+> `course_completed` fue eliminado intencionalmente. MeritCoin solo premia
+> calificaciones de actividades, no la finalización de cursos.
 
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| id | bigint | Auto-increment |
-| event_id | varchar(255) | ID unico para idempotencia |
-| student_id | bigint | ID del usuario en Moodle |
-| course_id | bigint | ID del curso |
-| event_type | varchar(50) | completion o grade |
-| grade | decimal | Nota (null si no aplica) |
-| status | varchar(20) | pending, sent, failed |
-| created_at | bigint | Timestamp de creacion |
-| sent_at | bigint | Timestamp de envio (null si pending) |
+## Tablas de la base de datos
 
-## Instalacion
+### `local_meritcoin_queue` — cola de eventos pendientes
+
+| Campo            | Tipo           | Descripción                                     |
+|------------------|----------------|-------------------------------------------------|
+| `event_id`       | varchar(255)   | ID único para idempotencia (MD5 determinístico) |
+| `userid`         | int            | ID del usuario en Moodle                        |
+| `courseid`       | int            | ID del curso                                    |
+| `cmid`           | int\|null      | ID del course module (null = nivel de curso)    |
+| `activity_name`  | varchar(255)   | Nombre de la actividad                          |
+| `event_type`     | varchar(50)    | `grade`                                         |
+| `grade`          | decimal(10,5)  | Calificación del estudiante                     |
+| `coins_amount`   | decimal(10,2)  | MRT calculados según la regla                   |
+| `student_wallet` | varchar(42)    | Wallet Ethereum; null si aún no registrada      |
+| `payload`        | text           | JSON completo que se enviará al backend         |
+| `status`         | varchar(20)    | `pending`, `pending_wallet`, `sent`, `failed`   |
+| `attempts`       | int            | Número de intentos de envío                     |
+| `last_error`     | text\|null     | Último error del backend                        |
+| `timecreated`    | int            | Timestamp de creación                           |
+| `timemodified`   | int            | Timestamp de última actualización               |
+
+### `local_meritcoin_rules` — reglas de recompensa
+
+| Campo          | Tipo          | Descripción                                            |
+|----------------|---------------|--------------------------------------------------------|
+| `courseid`     | int           | ID del curso                                           |
+| `cmid`         | int\|null     | Null = regla de curso o tipo; valor = actividad exacta |
+| `rule_scope`   | varchar(20)   | `activity`, `activity_type` o `course`                 |
+| `mod_type`     | varchar(50)   | Tipo de módulo: `assign`, `forum`, `quiz`, etc.        |
+| `coins_amount` | decimal(10,2) | MRT a otorgar                                          |
+| `coin_symbol`  | varchar(20)   | Símbolo de la moneda del curso                         |
+| `min_grade`    | decimal(10,5) | Nota mínima para activar la regla; null = sin umbral   |
+| `enabled`      | int(1)        | 1 = activa, 0 = deshabilitada                          |
+
+### `local_meritcoin_earnings` — ledger de ganancias por curso
+
+Registra cada MRT otorgado tras un envío exitoso al backend. Usado para
+calcular el saldo gastable del estudiante en el marketplace de cada curso.
+
+### `local_meritcoin_redemptions` — historial de canjes
+
+| Campo          | Tipo          | Descripción                                      |
+|----------------|---------------|--------------------------------------------------|
+| `userid`       | int           | Estudiante que canjea                            |
+| `rewardid`     | int           | Recompensa canjeada                              |
+| `coins_spent`  | decimal(10,2) | Precio al momento del canje                      |
+| `tx_hash`      | varchar(66)   | Hash de la transacción; null mientras se procesa |
+| `status`       | varchar(20)   | `pending`, `confirmed`, `failed`                 |
+| `attempts`     | int           | Intentos de procesamiento                        |
+| `last_error`   | text\|null    | Último error al procesar el canje                |
+
+## Instalación
 
 ### Requisitos previos
 
@@ -91,113 +143,136 @@ El `docker-compose.yml` ya monta la carpeta `./plugin` como volumen en:
 ```
 /bitnami/moodle/local/meritcoin
 ```
-
-El plugin se detecta automaticamente al reiniciar Moodle.
+El plugin se detecta automáticamente al reiniciar Moodle.
 
 ### Paso 2: Instalar en Moodle
 
-1. Ir a http://localhost:8080 e iniciar sesion como admin
+1. Ir a `http://localhost:8080` e iniciar sesión como admin
    - Usuario: `admin`
-   - Contrasena: `Admin1234!`
-2. Moodle detecta el plugin nuevo y muestra la pantalla de actualizacion
-3. Hacer clic en "Actualizar base de datos de Moodle"
+   - Contraseña: `Admin1234!`
+2. Moodle detecta el plugin nuevo y muestra la pantalla de actualización
+3. Hacer clic en **Actualizar base de datos de Moodle**
 
 ### Paso 3: Configurar el plugin
 
-Ir a la pagina de configuracion:
-
-**Ruta en menu:**
-Administracion del sitio > Plugins > Plugins locales > MeritCoin
+**Ruta en menú:**
+Administración del sitio > Plugins > Plugins locales > MeritCoin
 
 **O URL directa:**
 ```
 http://localhost:8080/admin/settings.php?section=local_meritcoin
 ```
 
-Configurar los siguientes campos:
-
-| Campo | Valor |
-|-------|-------|
-| Habilitado | Si (marcar checkbox) |
-| URL del backend | `http://host.docker.internal:8000` |
-| Secreto HMAC | `cambia-este-secreto-en-produccion` |
-| Campo wallet | `wallet` |
+| Campo                           | Valor recomendado (desarrollo)             |
+|---------------------------------|--------------------------------------------|
+| Habilitado                      | ✓ Sí                                       |
+| URL del backend                 | `http://host.docker.internal:8000`         |
+| Secreto HMAC                    | debe coincidir con `HMAC_SECRET` en `.env` |
+| Campo wallet                    | `wallet`                                   |
+| Límite MRT por estudiante/curso | `0` (sin límite) o el valor deseado        |
 
 ### Paso 4: Crear campo de perfil "wallet"
 
-1. Ir a: Administracion del sitio > Usuarios > Campos de perfil de usuario
-2. Clic en "Crear un nuevo campo de perfil"
-3. Elegir tipo "Entrada de texto"
-4. Llenar:
-   - Nombre corto: `wallet`
-   - Nombre: `Direccion Ethereum (Wallet)`
-   - Visible para: Todos
-5. Guardar cambios
+1. Ir a: Administración del sitio > Usuarios > Campos de perfil de usuario
+2. Clic en **Crear un nuevo campo de perfil** → tipo **Entrada de texto**
+3. Configurar:
+   - **Nombre corto:** `wallet`
+   - **Nombre:** `Dirección Ethereum (Wallet)`
+   - **Visible para:** Todos
+4. Guardar cambios
 
-Cada estudiante podra editar su perfil y agregar su wallet Ethereum (0x...).
+Cada estudiante puede agregar su wallet Ethereum (`0x...`) desde su perfil.
 
-## Configuracion detallada
+## URL del backend según escenario
 
-### URL del backend
+| Escenario                              | URL                               |
+|----------------------------------------|-----------------------------------|
+| Moodle en Docker, backend en Windows   | `http://host.docker.internal:8000` |
+| Ambos en Docker (misma red)            | `http://meritcoin-backend:8000`   |
+| Ambos en la misma máquina sin Docker   | `http://localhost:8000`           |
 
-La URL depende de donde corre Moodle y el backend:
+## Reglas de recompensa
 
-| Escenario | URL |
-|-----------|-----|
-| Moodle en Docker, backend en Windows | `http://host.docker.internal:8000` |
-| Ambos en Docker (misma red) | `http://meritcoin-backend:8000` |
-| Ambos en la misma maquina sin Docker | `http://localhost:8000` |
+Las reglas determinan cuántos MRT gana un estudiante por cada actividad.
+Se configuran desde el menú del curso (profesor) o desde la administración.
 
-### Secreto HMAC
+**Prioridad de evaluación:**
+1. Regla de actividad específica (por `cmid`)
+2. Regla por tipo de módulo (p. ej. todos los `assign`)
+3. Regla general del curso
 
-Debe coincidir **exactamente** con la variable `HMAC_SECRET` en el `.env`
-del backend. Si no coinciden, el backend rechazara las peticiones con HTTP 401.
+Si una regla tiene `min_grade`, el estudiante solo recibe MRT si supera
+ese umbral. La idempotencia es estricta: un estudiante recibe MRT por una
+actividad **una sola vez**, aunque la nota sea corregida posteriormente.
+Si la primera nota no superaba `min_grade` y luego se corrige, sí recibirá
+MRT en la corrección, ya que el evento nunca fue encolado antes.
 
-### Tarea programada (cron)
+## Tareas programadas
 
-El plugin registra una tarea programada (`send_events_task`) que se ejecuta
-cada 60 segundos. Moodle la ejecuta automaticamente con su propio cron.
+| Tarea                       | Frecuencia   | Función                                   |
+|-----------------------------|--------------|-------------------------------------------|
+| `send_events_task`          | Cada minuto  | Envía eventos `pending` al backend        |
+| `process_redemptions_task`  | Cada minuto  | Procesa canjes `pending` del marketplace  |
 
-Para ejecutar manualmente (util en pruebas):
+### Ejecutar manualmente (útil en pruebas)
+
 ```bash
+# Ejecutar todas las tareas del cron
 docker exec -it meritcoin-moodle-1 php //bitnami/moodle/admin/cli/cron.php
+
+# Ejecutar solo send_events_task
+docker exec meritcoin-moodle php /bitnami/moodle/admin/cli/scheduled_task.php \
+  --execute='\local_meritcoin\task\send_events_task'
+
+# Ejecutar solo process_redemptions_task
+docker exec meritcoin-moodle php /bitnami/moodle/admin/cli/scheduled_task.php \
+  --execute='\local_meritcoin\task\process_redemptions_task'
 ```
 
-Nota: En Git Bash en Windows, usar doble barra (`//bitnami/...`) para evitar
-que Git Bash convierta la ruta a formato Windows.
+> **Nota (Git Bash en Windows):** usar doble barra (`//bitnami/...`) para
+> evitar que Git Bash convierta la ruta a formato Windows.
 
 ## Capacidades (permisos)
 
-| Capacidad | Descripcion | Roles por defecto |
-|-----------|-------------|-------------------|
-| local/meritcoin:viewbadges | Ver insignias de otros | Manager |
-| local/meritcoin:manageplugin | Configurar el plugin | Admin |
+| Capacidad                         | Descripción                              | Roles por defecto        |
+|-----------------------------------|------------------------------------------|--------------------------|
+| `local/meritcoin:manage`          | Configurar el plugin globalmente         | Admin                    |
+| `local/meritcoin:manage_rules`    | Gestionar reglas de monedas en un curso  | Teacher, Editing Teacher |
+| `local/meritcoin:managerewards`   | Crear/editar recompensas del marketplace | Teacher, Editing Teacher |
+| `local/meritcoin:viewmarketplace` | Ver y canjear recompensas                | Student                  |
+| `local/meritcoin:awardbadges`     | Otorgar insignias a estudiantes          | Teacher, Editing Teacher |
+| `local/meritcoin:viewbadges`      | Ver insignias de otros usuarios          | Manager                  |
 
-## Idiomas
-
-El plugin incluye strings en ingles y espanol. Moodle selecciona
-automaticamente segun el idioma configurado del sitio o del usuario.
-
-## Depuracion
+## Depuración
 
 ### Ver la cola de eventos
 
-Consultar directamente la tabla en la base de datos de Moodle:
-
 ```sql
-SELECT * FROM mdl_local_meritcoin_queue ORDER BY created_at DESC;
+SELECT event_id, userid, courseid, event_type, coins_amount, status, attempts, last_error
+FROM mdl_local_meritcoin_queue
+ORDER BY timecreated DESC
+LIMIT 50;
 ```
 
-### Verificar que el plugin esta activo
+### Ver canjes pendientes
+
+```sql
+SELECT id, userid, rewardid, coins_spent, status, attempts, last_error
+FROM mdl_local_meritcoin_redemptions
+WHERE status != 'confirmed'
+ORDER BY timecreated DESC;
+```
+
+### Verificar que el plugin está activo
 
 ```
 http://localhost:8080/admin/settings.php?section=local_meritcoin
 ```
 
-Si la pagina carga con los campos de configuracion, el plugin esta instalado
-correctamente.
-
 ### Logs de Moodle
 
-Los logs del plugin se registran con el prefijo `[local_meritcoin]` en los
-logs estandar de Moodle.
+Las tareas programadas escriben al output del cron con el prefijo `MeritCoin:`.
+Los errores de desarrollo se registran con `debugging(...)`, visibles en Moodle
+cuando el modo depuración está activado en:
+
+Administración del sitio > Desarrollo > Depuración → nivel **DEVELOPER**
