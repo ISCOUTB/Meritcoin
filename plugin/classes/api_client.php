@@ -152,6 +152,11 @@ class api_client {
             return null;
         }
 
+        // ── AÑADIR ESTE GUARD ────────────────────────
+        if (empty($this->hmacsecret)) {
+            return null;
+        }
+
         $curl = new \curl();
         $curl->setHeader([
             'Accept: application/json',
