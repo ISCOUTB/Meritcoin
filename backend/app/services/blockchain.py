@@ -80,6 +80,16 @@ MRT_ABI = json.loads("""[
     "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "from",   "type": "address"},
+      {"internalType": "uint256", "name": "amount", "type": "uint256"}
+    ],
+    "name": "burnFrom",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ]""")
 
@@ -126,7 +136,7 @@ class BlockchainService:
         })
         signed = self.account.sign_transaction(tx)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
         return receipt
 
     def mint_badge(self, to: str, badge_id: int, uri: str) -> str:
@@ -182,6 +192,24 @@ class BlockchainService:
         balance_wei = self.mrt_contract.functions.balanceOf(addr).call()
         balance_mrt = Web3.from_wei(balance_wei, "ether")
         return (str(balance_mrt), str(balance_wei))
+
+    def burn_mrt(self, from_addr: str, amount_ether: float) -> str:
+        """
+        Quema tokens MRT de un wallet (canje en marketplace).
+        amount_ether: cantidad en unidades enteras (se convierte a wei).
+        Retorna el tx_hash como string hex.
+        """
+        if not self.mrt_contract:
+            raise RuntimeError("Contrato MRT no configurado (MRT_CONTRACT_ADDRESS vacío)")
+
+        addr = Web3.to_checksum_address(from_addr)
+        amount_wei = Web3.to_wei(str(amount_ether), "ether")
+        receipt = self._send_tx(
+            self.mrt_contract.functions.burnFrom(addr, amount_wei)
+        )
+        tx_hash = receipt.transactionHash.hex()
+        logger.info(f"{amount_ether} MRT quemados de {from_addr} — tx: {tx_hash}")
+        return tx_hash
 
 
 # Singleton

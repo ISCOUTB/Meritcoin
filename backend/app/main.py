@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import events, students, badges
+from app.api import events, students, badges, tokens
 from app.core.config import settings
 from app.core.database import init_db
 
@@ -41,6 +41,7 @@ app = FastAPI(
 app.include_router(events.router)
 app.include_router(students.router)
 app.include_router(badges.router)
+app.include_router(tokens.router)
 
 
 @app.get("/health", tags=["System"])

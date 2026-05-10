@@ -45,6 +45,16 @@ if ($hassiteconfig) {
 
     $ADMIN->add('localplugins', $settings);
 
+
+    // ── Límite de emisión de MRT por profesor ─────────────────────────────────
+    $settings->add(new admin_setting_configtext(
+        'local_meritcoin/student_limit',
+        get_string('student_limit', 'local_meritcoin'),
+        get_string('student_limit_desc', 'local_meritcoin'),
+        16, 
+        PARAM_INT
+    ));
+
     // ── Páginas de administración ──────────────────────────────────────────────
     $ADMIN->add('localplugins',
         new admin_externalpage(

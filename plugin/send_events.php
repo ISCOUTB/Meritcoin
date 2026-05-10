@@ -101,7 +101,7 @@ class send_events extends \core\task\scheduled_task {
 
             $curl->setHeader($headers);
 
-            $url      = rtrim($backendurl, '/') . '/events';
+            $url = rtrim($backendurl, '/') . '/events/ingest';
             $response = $curl->post($url, $event->payload);
             $errno    = $curl->get_errno();
             $info     = $curl->get_info();

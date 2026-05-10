@@ -1,0 +1,115 @@
+services:
+  besu-node-1:
+    image: hyperledger/besu:latest
+    container_name: besu-node-1
+    command:
+      - --data-path=/var/lib/besu/data
+      - --genesis-file=/var/lib/besu/genesis.json
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-http-api=ETH,NET,QBFT,WEB3,TXPOOL
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=all
+      - --p2p-host=0.0.0.0
+      - --p2p-port=30303
+      - --profile=ENTERPRISE
+    volumes:
+      - ./genesis.json:/var/lib/besu/genesis.json
+      - ./Node-1/data:/var/lib/besu/data
+    ports:
+      - "8545:8545"
+      - "30303:30303"
+    networks:
+      - besu-network
+
+  besu-node-2:
+    image: hyperledger/besu:latest
+    container_name: besu-node-2
+    command:
+      - --data-path=/var/lib/besu/data
+      - --genesis-file=/var/lib/besu/genesis.json
+      - --bootnodes=enode://cf90d87fd8c4f9692392704dcce7d4852dc69804e8bc0484dbf410523e2d6c7a90afe8e8b94a9f29af0d8282995df803ae2d4fa917177859d38b430376645827@besu-node-1:30303
+      - --Xdns-enabled=true
+      - --Xdns-update-enabled=true
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-http-api=ETH,NET,QBFT,WEB3,TXPOOL
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=all
+      - --p2p-host=0.0.0.0
+      - --p2p-port=30303
+      - --profile=ENTERPRISE
+    volumes:
+      - ./genesis.json:/var/lib/besu/genesis.json
+      - ./Node-2/data:/var/lib/besu/data
+    ports:
+      - "8546:8545"
+      - "30304:30303"
+    depends_on:
+      - besu-node-1
+    networks:
+      - besu-network
+
+  besu-node-3:
+    image: hyperledger/besu:latest
+    container_name: besu-node-3
+    command:
+      - --data-path=/var/lib/besu/data
+      - --genesis-file=/var/lib/besu/genesis.json
+      - --bootnodes=enode://cf90d87fd8c4f9692392704dcce7d4852dc69804e8bc0484dbf410523e2d6c7a90afe8e8b94a9f29af0d8282995df803ae2d4fa917177859d38b430376645827@besu-node-1:30303
+      - --Xdns-enabled=true
+      - --Xdns-update-enabled=true
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-http-api=ETH,NET,QBFT,WEB3,TXPOOL
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=all
+      - --p2p-host=0.0.0.0
+      - --p2p-port=30303
+      - --profile=ENTERPRISE
+    volumes:
+      - ./genesis.json:/var/lib/besu/genesis.json
+      - ./Node-3/data:/var/lib/besu/data
+    ports:
+      - "8547:8545"
+      - "30305:30303"
+    depends_on:
+      - besu-node-1
+    networks:
+      - besu-network
+
+  besu-node-4:
+    image: hyperledger/besu:latest
+    container_name: besu-node-4
+    command:
+      - --data-path=/var/lib/besu/data
+      - --genesis-file=/var/lib/besu/genesis.json
+      - --bootnodes=enode://cf90d87fd8c4f9692392704dcce7d4852dc69804e8bc0484dbf410523e2d6c7a90afe8e8b94a9f29af0d8282995df803ae2d4fa917177859d38b430376645827@besu-node-1:30303
+      - --Xdns-enabled=true
+      - --Xdns-update-enabled=true
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-http-api=ETH,NET,QBFT,WEB3,TXPOOL
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=all
+      - --p2p-host=0.0.0.0
+      - --p2p-port=30303
+      - --profile=ENTERPRISE
+    volumes:
+      - ./genesis.json:/var/lib/besu/genesis.json
+      - ./Node-4/data:/var/lib/besu/data
+    ports:
+      - "8548:8545"
+      - "30306:30303"
+    depends_on:
+      - besu-node-1
+    networks:
+      - besu-network
+
+networks:
+  besu-network:
+    driver: bridge

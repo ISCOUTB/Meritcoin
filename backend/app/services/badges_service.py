@@ -13,6 +13,7 @@ from app.models.badges import BadgeAward, BadgeTemplate, Skill
 from app.models.badges_schema import (
     BadgeAwardCreate, BadgeTemplateCreate, BadgeTemplateUpdate, PublicVerifyResponse,
 )
+from app.services.blockchain import blockchain  # ← AÑADIDO
 
 logger = logging.getLogger(__name__)
 
@@ -169,12 +170,46 @@ async def award_badge(db, data: BadgeAwardCreate):
             raise HTTPException(status_code=422, detail="'course_id' es requerido para profesores.")
         await _assert_teacher_can_award(db, data.issued_by_id, data.student_id, data.course_id)
 
-    simulated_tx = f"0xSIMULATED_{data.student_id}_{data.template_id[:8]}"
+    # ── Interacción con blockchain ────────────────────────────────────────────
+    # badge_id: uint256 derivado del UUID del template (reproducible y único)
+    badge_id = int(data.template_id.replace("-", ""), 16) % (2 ** 256)
+    uri = f"https://meritcoin.app/badges/{data.template_id}"
+
+    tx_hash = None
+    chain_status = "pending"
+
+    if data.student_wallet and blockchain.is_connected():
+        # ── Mintear badge ──────────────────────────────────────────
+        try:
+            tx_hash = blockchain.mint_badge(data.student_wallet, badge_id, uri)
+            chain_status = "confirmed"
+            logger.info(f"Badge minteado en blockchain: tx={tx_hash}")
+        except Exception as exc:
+            logger.warning(f"Error al mintear badge: {exc}")
+            tx_hash = None
+            chain_status = "failed"
+
+        # ── Mintear MRT (independiente, no afecta chain_status del badge) ──
+        try:
+            mrt_reward = getattr(t, "mrt_reward", None)
+            if mrt_reward and float(mrt_reward) > 0:
+                mrt_tx = blockchain.mint_mrt(data.student_wallet, float(mrt_reward))
+                logger.info(f"{mrt_reward} MRT acuñados: tx={mrt_tx}")
+        except Exception as exc:
+            logger.warning(f"Error al mintear MRT (no crítico): {exc}")
+    else:
+        chain_status = "skipped"
+        logger.warning(
+            "Blockchain no disponible o wallet no proporcionado — "
+            "badge guardado off-chain sin transacción."
+        )
+    # ─────────────────────────────────────────────────────────────────────────
+
     award = BadgeAward(
         template_id=data.template_id, student_id=data.student_id,
         student_wallet=data.student_wallet, issued_by_id=data.issued_by_id,
         issued_by_role=data.issued_by_role.value, course_id=data.course_id,
-        tx_hash=simulated_tx, chain_status="simulated",
+        tx_hash=tx_hash, chain_status=chain_status,
     )
     db.add(award)
     await db.commit()
