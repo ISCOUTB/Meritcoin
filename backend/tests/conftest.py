@@ -33,14 +33,6 @@ TestSessionLocal = async_sessionmaker(
 
 # ── Fixtures ────────────────────────────────────────────────────────────
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Crea un event loop para toda la sesión de tests."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
 @pytest_asyncio.fixture(autouse=True)
 async def setup_database():
     """Crea y destruye las tablas antes/después de cada test."""

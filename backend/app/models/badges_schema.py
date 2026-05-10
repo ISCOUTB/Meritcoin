@@ -1,20 +1,28 @@
-"""Schemas Pydantic para el sistema de insignias."""
+"""
+Schemas Pydantic para el sistema de insignias.
+
+Usados por la API (badges.py) y el servicio (badges_service.py).
+"""
 
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 
 class IssuedByRole(str, Enum):
+    """Rol del emisor de una insignia."""
     admin   = "admin"
     teacher = "teacher"
 
 
 class ChainStatus(str, Enum):
-    simulated = "simulated"
+    """Estado de la transacción en blockchain."""
     pending   = "pending"
     confirmed = "confirmed"
+    failed    = "failed"
+    skipped   = "skipped"
 
 
 # ── Skills ────────────────────────────────────────────────────────────────────
@@ -22,6 +30,7 @@ class ChainStatus(str, Enum):
 class SkillCreate(BaseModel):
     name:        str           = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+
 
 class SkillResponse(BaseModel):
     id:          str
@@ -34,14 +43,16 @@ class SkillResponse(BaseModel):
 # ── Badge Templates ───────────────────────────────────────────────────────────
 
 class BadgeTemplateCreate(BaseModel):
-    name:            str              = Field(..., min_length=1, max_length=255)
-    description:     str              = Field(..., min_length=1)
+    name:            str                  = Field(..., min_length=1, max_length=255)
+    description:     str                  = Field(..., min_length=1)
     image_url:       Optional[str]        = None
     criteria:        Optional[List[str]]  = None
-    skill_ids:       Optional[List[str]]  = None   # IDs de skills existentes
-    new_skills:      Optional[List[str]]  = None   # Nombres de skills nuevas
-    created_by_id:   str
-    created_by_role: IssuedByRole = IssuedByRole.teacher
+    skill_ids:       Optional[List[str]]  = None   # IDs de skills ya existentes
+    new_skills:      Optional[List[str]]  = None   # Nombres de skills a crear
+    created_by_id:   str                  = Field(...)
+    created_by_role: IssuedByRole         = IssuedByRole.teacher
+    mrt_reward:      Optional[float]      = Field(None, ge=0, description="MRT extra al otorgar esta insignia")
+
 
 class BadgeTemplateUpdate(BaseModel):
     name:        Optional[str]       = None
@@ -51,19 +62,22 @@ class BadgeTemplateUpdate(BaseModel):
     skill_ids:   Optional[List[str]] = None
     new_skills:  Optional[List[str]] = None
     is_active:   Optional[bool]      = None
+    mrt_reward:  Optional[float]     = Field(None, ge=0)
+
 
 class BadgeTemplateResponse(BaseModel):
-    id:             str
-    name:           str
-    description:    str
-    image_url:      Optional[str]
-    criteria:       List[str]
-    skills:         List[SkillResponse]
-    created_by_id:  str
+    id:              str
+    name:            str
+    description:     str
+    image_url:       Optional[str]
+    criteria:        List[str]
+    skills:          List[SkillResponse]
+    created_by_id:   str
     created_by_role: str
-    is_active:      bool
-    created_at:     datetime
-    updated_at:     datetime
+    is_active:       bool
+    mrt_reward:      Optional[float] = None
+    created_at:      datetime
+    updated_at:      datetime
     model_config = {"from_attributes": True}
 
 
@@ -75,7 +89,8 @@ class BadgeAwardCreate(BaseModel):
     student_wallet: Optional[str] = Field(None, pattern=r"^0x[0-9a-fA-F]{40}$")
     issued_by_id:   str           = Field(...)
     issued_by_role: IssuedByRole
-    course_id:      Optional[str] = Field(None, description="Requerido si rol=teacher")
+    course_id:      Optional[str] = Field(None, description="Requerido si issued_by_role=teacher")
+
 
 class BadgeAwardResponse(BaseModel):
     id:             str
@@ -96,6 +111,7 @@ class BadgeAwardResponse(BaseModel):
 # ── Verificación pública ──────────────────────────────────────────────────────
 
 class PublicVerifyResponse(BaseModel):
+    """Respuesta del endpoint público /verify/{award_id} (sin autenticación)."""
     award_id:          str
     valid:             bool
     student_id:        str

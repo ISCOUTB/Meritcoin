@@ -1,5 +1,5 @@
 """
-Endpoint: POST /events/ingest
+Router: POST /events/ingest
 
 Recibe eventos académicos desde el plugin de Moodle,
 valida el HMAC y dispara el flujo completo de procesamiento.
@@ -7,7 +7,7 @@ valida el HMAC y dispara el flujo completo de procesamiento.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,34 +24,50 @@ router = APIRouter(prefix="/events", tags=["Events"])
 @router.post(
     "/ingest",
     response_model=EventResponse,
+    status_code=status.HTTP_200_OK,
     summary="Recibir evento académico de Moodle",
-    description="Recibe un evento firmado con HMAC, procesa la insignia y acuña MRT.",
+    description=(
+        "Recibe un evento firmado con HMAC-SHA256, valida la firma, "
+        "procesa la recompensa MRT y registra la auditoría."
+    ),
 )
 async def ingest_event(
     body: bytes = Depends(verify_hmac),
     db: AsyncSession = Depends(get_db),
 ) -> EventResponse:
+    """
+    Punto de entrada para eventos del plugin Moodle.
+
+    El body ya fue validado por verify_hmac (dependency).
+    Si el payload JSON es inválido retorna 422.
+    Si el procesamiento interno falla retorna 500.
+    """
     try:
         event = AcademicEvent.model_validate_json(body)
-    except ValidationError as e:
-        logger.warning("Payload inválido recibido en /events/ingest: %s", e.errors())
-        raise HTTPException(status_code=422, detail=e.errors())
+    except ValidationError as exc:
+        logger.warning("Payload inválido en /events/ingest: %s", exc.errors())
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=exc.errors(),
+        )
 
     logger.info(
-        "Evento recibido: id=%s type=%s wallet=%s course=%s activity=%s coins=%s",
+        "Evento recibido: id=%s type=%s student=%s course=%s activity=%s coins=%s",
         event.event_id,
         event.event_type,
-        event.student_wallet,
+        event.student_id,
         event.course_id,
-        getattr(event, "activity_id", None),
-        getattr(event, "coins_amount", None),
+        event.activity_id,
+        event.coins_amount,
     )
 
     try:
-        result = await events_service.process_event(db, event)
-        return result
+        return await events_service.process_event(db, event)
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Error procesando evento %s", event.event_id)
-        raise HTTPException(status_code=500, detail=f"Error processing event: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al procesar evento: {exc}",
+        )

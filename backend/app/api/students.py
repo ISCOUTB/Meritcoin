@@ -1,21 +1,23 @@
 """
-Endpoints de consulta para estudiantes:
-- GET /students/{wallet}/badges   → insignias de un estudiante
-- GET /students/{wallet}/balance  → saldo MRT
-- GET /students/{wallet}/summary  → resumen completo (para Moodle dashboard)
+Router: endpoints de consulta para estudiantes.
+
+Rutas:
+  GET /students/{wallet}/badges   → insignias de un estudiante (tabla audit_log)
+  GET /students/{wallet}/balance  → saldo MRT (blockchain con fallback BD)
+  GET /students/{wallet}/summary  → resumen completo consumido por el plugin Moodle
 """
 
 import logging
-from sqlalchemy import select, Numeric
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import Numeric, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.audit import AuditLog, EventRecord
+from app.models.badges import BadgeAward, BadgeTemplate
 from app.models.events import StudentBadge, StudentBalance
 from app.services.blockchain import blockchain
 
@@ -24,13 +26,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/students", tags=["Students"])
 
 
-# ─── Modelo de respuesta para el dashboard de Moodle ─────────────────────────
+# ── Modelos propios del módulo ────────────────────────────────────────────────
 
 class BadgeSummaryItem(BaseModel):
-    """Formato de badge esperado por dashboard.php de Moodle."""
+    """Formato de badge esperado por dashboard.php del plugin Moodle."""
     name: str
     image_url: Optional[str] = None
-    awarded_at: Optional[int] = None  # Unix timestamp (int para PHP)
+    awarded_at: Optional[int] = None  # Unix timestamp como int (más fácil para PHP)
 
 
 class StudentSummaryResponse(BaseModel):
@@ -39,7 +41,7 @@ class StudentSummaryResponse(BaseModel):
     badges: List[BadgeSummaryItem]
 
 
-# ─── Endpoints existentes (sin cambios) ──────────────────────────────────────
+# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get(
     "/{wallet}/badges",
@@ -51,8 +53,8 @@ async def get_student_badges(
     db: AsyncSession = Depends(get_db),
 ) -> List[StudentBadge]:
     """
-    Consulta la tabla audit_log + events para armar la lista
-    de insignias emitidas a un wallet.
+    Lista las insignias del flujo automático (vía audit_log + events).
+    Las insignias del flujo manual (BadgeAward) se consultan en /badges/student/{id}.
     """
     query = (
         select(EventRecord, AuditLog)
@@ -63,9 +65,8 @@ async def get_student_badges(
     result = await db.execute(query)
     rows = result.all()
 
-    badges = []
-    for event, audit in rows:
-        badges.append(StudentBadge(
+    return [
+        StudentBadge(
             badge_id=int(audit.badge_id) if audit.badge_id else 0,
             course_id=event.course_id,
             course_name=event.course_name,
@@ -73,9 +74,9 @@ async def get_student_badges(
             uri=f"ipfs://{audit.cid_ipfs}" if audit.cid_ipfs else "",
             tx_hash=audit.tx_badge or "",
             issued_at=event.processed_at,
-        ))
-
-    return badges
+        )
+        for event, audit in rows
+    ]
 
 
 @router.get(
@@ -84,13 +85,11 @@ async def get_student_badges(
     summary="Consultar saldo MRT de un estudiante",
 )
 async def get_student_balance(wallet: str) -> StudentBalance:
-    """
-    Consulta el balance MRT directamente desde la blockchain.
-    """
+    """Consulta el balance MRT directamente desde la blockchain."""
     try:
         balance_mrt, balance_wei = blockchain.get_mrt_balance(wallet)
-    except Exception as e:
-        logger.error(f"Error consultando balance de {wallet}: {e}")
+    except Exception as exc:
+        logger.error("Error consultando balance de %s: %s", wallet, exc)
         balance_mrt, balance_wei = "0", "0"
 
     return StudentBalance(
@@ -100,68 +99,61 @@ async def get_student_balance(wallet: str) -> StudentBalance:
     )
 
 
-# ─── Endpoint NUEVO para el dashboard de Moodle ──────────────────────────────
-
 @router.get(
     "/{wallet}/summary",
     response_model=StudentSummaryResponse,
-    summary="Resumen completo del estudiante (consumido por Moodle)",
+    summary="Resumen completo del estudiante (consumido por el plugin Moodle)",
 )
 async def get_student_summary(
     wallet: str,
     db: AsyncSession = Depends(get_db),
 ) -> StudentSummaryResponse:
     """
-    Combina balance MRT + badges en una sola llamada.
-    Balance MRT: suma desde audit_log (fallback si blockchain no responde).
-    Badges: desde badge_awards (flujo manual separado).
-    """
+    Combina balance MRT + badges en una sola llamada para el dashboard de Moodle.
 
-    # 1. Intentar balance desde blockchain; fallback a suma en BD
+    Balance: primero intenta blockchain; si falla, suma desde audit_log en BD.
+    Badges: solo incluye las no revocadas del flujo manual (BadgeAward).
+    """
+    # ── 1. Balance MRT ────────────────────────────────────────────────────────
     balance_float = 0.0
     try:
         balance_mrt, _ = blockchain.get_mrt_balance(wallet)
         balance_float = float(str(balance_mrt))
-    except Exception as e:
-        logger.warning("[summary] Blockchain no disponible para %s: %s — usando BD", wallet, e)
+    except Exception as exc:
+        logger.warning("Blockchain no disponible para %s: %s — usando BD como fallback", wallet, exc)
         try:
-            from sqlalchemy import func as sqlfunc
             result_sum = await db.execute(
-                select(sqlfunc.sum(AuditLog.mrt_amount.cast(Numeric)))
+                select(func.sum(AuditLog.mrt_amount.cast(Numeric)))
                 .join(EventRecord, AuditLog.event_id == EventRecord.event_id)
                 .where(EventRecord.student_wallet == wallet)
                 .where(EventRecord.status == "processed")
             )
             total = result_sum.scalar_one_or_none()
-            logger.warning("DEBUG fallback total=%s type=%s", total, type(total))
             balance_float = float(total) if total else 0.0
-        except Exception as e2:
-            logger.error("[summary] Error fallback BD balance %s: %s", wallet, e2)
+        except Exception as exc2:
+            logger.error("Error en fallback BD para balance de %s: %s", wallet, exc2)
             balance_float = 0.0
 
-    # 2. Badges desde badge_awards (flujo manual, separado de eventos MRT)
+    # ── 2. Badges ─────────────────────────────────────────────────────────────
     badges: List[BadgeSummaryItem] = []
     try:
-        from app.models.badges import BadgeAward, BadgeTemplate
         query = (
             select(BadgeAward, BadgeTemplate)
             .join(BadgeTemplate, BadgeAward.template_id == BadgeTemplate.id)
             .where(BadgeAward.student_wallet == wallet)
-            .where(BadgeAward.revoked == False)
+            .where(BadgeAward.revoked == False)  # noqa: E712
             .order_by(BadgeAward.issued_at.desc())
         )
         result = await db.execute(query)
-        rows = result.all()
-        for award, template in rows:
-            badges.append(BadgeSummaryItem(
+        badges = [
+            BadgeSummaryItem(
                 name=template.name,
                 image_url=template.image_url,
                 awarded_at=int(award.issued_at.timestamp()) if award.issued_at else None,
-            ))
-    except Exception as e:
-        logger.warning("[summary] Error cargando badges de %s: %s", wallet, e)
+            )
+            for award, template in result.all()
+        ]
+    except Exception as exc:
+        logger.warning("Error cargando badges de %s: %s", wallet, exc)
 
-    return StudentSummaryResponse(
-        mrt_balance=balance_float,
-        badges=badges,
-    )
+    return StudentSummaryResponse(mrt_balance=balance_float, badges=badges)

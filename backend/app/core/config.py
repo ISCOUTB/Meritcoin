@@ -1,37 +1,54 @@
 """
 Configuración centralizada del backend MeritCoin.
-Lee variables de entorno (o .env) usando pydantic-settings.
+
+Lee variables de entorno usando pydantic-settings.
+Docker Compose inyecta las variables via `env_file: .env` en el servicio,
+por lo que NO se necesita apuntar a un archivo .env desde aquí.
+Para desarrollo local fuera de Docker, exporta las variables manualmente
+o usa un .env en el directorio desde donde lanzas uvicorn.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from typing import List
 
 
 class Settings(BaseSettings):
+    cors_origins: List[str] = ["*"]
     model_config = SettingsConfigDict(
-        env_file="../../.env",       # Ruta relativa al .env de la raíz
+        env_file=".env",           # Útil solo en desarrollo local fuera de Docker
         env_file_encoding="utf-8",
-        extra="ignore",              # Ignorar variables que no estén declaradas
+        extra="ignore",            # Ignorar variables no declaradas en este modelo
     )
 
-    # ── FastAPI ────────────────────────────────────────────────────────
-    debug: bool = True
+    # ── FastAPI ───────────────────────────────────────────────────────────────
+    debug: bool = False
     fastapi_port: int = 8000
 
-    # ── Base de datos PostgreSQL ───────────────────────────────────────
-    database_url: str = "postgresql+asyncpg://meritcoin:meritcoin_pass@localhost:5432/meritcoin_db"
+    # ── Base de datos PostgreSQL ──────────────────────────────────────────────
+    database_url: str = (
+        "postgresql+asyncpg://meritcoin:meritcoin_pass@meritcoin-postgres:5432/meritcoin_db"
+    )
 
-    # ── Seguridad HMAC ────────────────────────────────────────────────
+    # ── Seguridad HMAC ────────────────────────────────────────────────────────
+    # OBLIGATORIO en producción. El valor por defecto solo sirve para tests.
     hmac_secret: str = "cambia-este-secreto-en-produccion"
 
-    # ── Blockchain ────────────────────────────────────────────────────
-    blockchain_rpc_url: str = "http://127.0.0.1:8545"
-    deployer_private_key: str = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+    # ── Blockchain (Hyperledger Besu) ─────────────────────────────────────────
+    # En Docker Compose el host es el nombre del servicio: meritcoin-besu
+    blockchain_rpc_url: str = "http://meritcoin-besu:8545"
+
+    # OBLIGATORIO. Sin esta clave el backend no puede firmar transacciones.
+    # No usar claves de desarrollo en producción.
+    deployer_private_key: str = ""
+
+    # Direcciones de los contratos desplegados en Besu.
+    # Se obtienen ejecutando: npx hardhat run scripts/deploy.js --network besu
     badge_contract_address: str = ""
     mrt_contract_address: str = ""
 
-    # ── Tokens MRT por tipo de evento ─────────────────────────────────
-    mrt_reward_completion: int = 100   # MRT por completar un curso
-    mrt_reward_grade: int = 50         # MRT por calificación aprobatoria
+    # ── CORS ─────────────────────────────────────────────────────────────────
+    cors_origins: List[str] = ["*"]
 
 
 settings = Settings()

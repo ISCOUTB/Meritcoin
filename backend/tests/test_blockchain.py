@@ -142,12 +142,12 @@ class TestBlockchainServiceMocked:
     """Tests del servicio blockchain usando el mock de conftest."""
 
     @pytest.mark.asyncio
-    async def test_blockchain_connected(self, mock_blockchain):
+    def test_blockchain_connected(self, mock_blockchain):
         """El mock reporta conexión activa."""
         assert mock_blockchain.is_connected() is True
 
     @pytest.mark.asyncio
-    async def test_mint_badge_returns_hash(self, mock_blockchain):
+    def test_mint_badge_returns_hash(self, mock_blockchain):
         """mint_badge retorna un tx_hash hex."""
         tx = mock_blockchain.mint_badge(
             "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", 12345, "ipfs://QmTest"
@@ -156,7 +156,7 @@ class TestBlockchainServiceMocked:
         assert len(tx) == 66  # 0x + 64 hex chars
 
     @pytest.mark.asyncio
-    async def test_mint_mrt_returns_hash(self, mock_blockchain):
+    def test_mint_mrt_returns_hash(self, mock_blockchain):
         """mint_mrt retorna un tx_hash hex."""
         tx = mock_blockchain.mint_mrt(
             "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", 100
@@ -165,7 +165,7 @@ class TestBlockchainServiceMocked:
         assert len(tx) == 66
 
     @pytest.mark.asyncio
-    async def test_get_mrt_balance(self, mock_blockchain):
+    def test_get_mrt_balance(self, mock_blockchain):
         """get_mrt_balance retorna tupla (mrt, wei)."""
         balance = mock_blockchain.get_mrt_balance(
             "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
