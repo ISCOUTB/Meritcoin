@@ -19,7 +19,7 @@ foreach ($courses as $course) {
     }
 }
 
-if ($redirectteacher) {
+if (!local_meritcoin_is_student_only()) {
     redirect(new moodle_url('/my'));
 }
 

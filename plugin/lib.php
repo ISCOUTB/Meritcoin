@@ -10,10 +10,28 @@ require_once($CFG->libdir . '/filelib.php');
 // NAVEGACIÓN — Moodle 4.x
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function local_meritcoin_extend_navigation(global_navigation $nav) {
+function local_meritcoin_is_student_only(): bool {
     if (!isloggedin() || isguestuser()) {
-        return;
+        return false;
     }
+    // Admins y managers globales nunca son "solo estudiantes"
+    if (is_siteadmin() || has_capability('moodle/site:config', context_system::instance())) {
+        return false;
+    }
+    // Si tiene manage_rules o managerewards en CUALQUIER curso => teacher/manager
+    $courses = enrol_get_users_courses($GLOBALS['USER']->id, true);
+    foreach ($courses as $course) {
+        $ctx = context_course::instance($course->id);
+        if (has_capability('local/meritcoin:managerewards', $ctx) ||
+            has_capability('local/meritcoin:manage_rules', $ctx)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function local_meritcoin_extend_navigation(global_navigation $nav) {
+    if (!local_meritcoin_is_student_only()) { return; }
 
     $nav->add_node(navigation_node::create(
         get_string('pluginname', 'local_meritcoin'),
@@ -32,9 +50,7 @@ function local_meritcoin_extend_navigation_user_settings($nav, $context) {
         return;
     }
 
-    if ($context->userid !== $USER->id || !isloggedin() || isguestuser()) {
-        return;
-    }
+    if ($context->userid !== $USER->id || !local_meritcoin_is_student_only()) { return; }
 
     $nav->add(
         get_string('mymeritcoin', 'local_meritcoin'),
@@ -236,9 +252,7 @@ function local_meritcoin_status_badge(string $status): string {
 }
 
 function local_meritcoin_render_navbar_output(\renderer_base $renderer) {
-    if (!isloggedin() || isguestuser()) {
-        return '';
-    }
+    if (!local_meritcoin_is_student_only()) { return ''; }
 
     $url = new moodle_url('/local/meritcoin/dashboard.php');
 
