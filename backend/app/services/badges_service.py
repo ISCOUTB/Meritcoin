@@ -179,20 +179,24 @@ async def award_badge(db, data: BadgeAwardCreate):
     chain_status = "pending"
 
     if data.student_wallet and blockchain.is_connected():
+        # ── Mintear badge ──────────────────────────────────────────
         try:
             tx_hash = blockchain.mint_badge(data.student_wallet, badge_id, uri)
             chain_status = "confirmed"
             logger.info(f"Badge minteado en blockchain: tx={tx_hash}")
-
-            # Mintear tokens MRT si el template tiene recompensa
-            if t.mrt_reward and t.mrt_reward > 0:
-                mrt_tx = blockchain.mint_mrt(data.student_wallet, float(t.mrt_reward))
-                logger.info(f"{t.mrt_reward} MRT acuñados: tx={mrt_tx}")
-
         except Exception as exc:
-            logger.warning(f"Error al interactuar con blockchain: {exc}")
+            logger.warning(f"Error al mintear badge: {exc}")
             tx_hash = None
             chain_status = "failed"
+
+        # ── Mintear MRT (independiente, no afecta chain_status del badge) ──
+        try:
+            mrt_reward = getattr(t, "mrt_reward", None)
+            if mrt_reward and float(mrt_reward) > 0:
+                mrt_tx = blockchain.mint_mrt(data.student_wallet, float(mrt_reward))
+                logger.info(f"{mrt_reward} MRT acuñados: tx={mrt_tx}")
+        except Exception as exc:
+            logger.warning(f"Error al mintear MRT (no crítico): {exc}")
     else:
         chain_status = "skipped"
         logger.warning(
