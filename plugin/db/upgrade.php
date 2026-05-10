@@ -452,14 +452,14 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
                     $dbman->add_index($btable, $new);
                 }
             }
-            // badges_hash_uix → uq_hash
-            $old = new xmldb_index('badges_hash_uix', XMLDB_INDEX_UNIQUE, ['verify_hash']);
-            if ($dbman->index_exists($btable, $old)) {
-                $dbman->drop_index($btable, $old);
-                $new = new xmldb_index('uq_hash', XMLDB_INDEX_UNIQUE, ['verify_hash']);
-                if (!$dbman->index_exists($btable, $new)) {
-                    $dbman->add_index($btable, $new);
-                }
+            // badges_hash_uix → uq_hash  ✅ CORREGIDO: KEY en lugar de INDEX
+            $old_index = new xmldb_index('badges_hash_uix', XMLDB_INDEX_UNIQUE, ['verify_hash']);
+            if ($dbman->index_exists($btable, $old_index)) {
+                $dbman->drop_index($btable, $old_index);
+            }
+            $key = new xmldb_key('uq_hash', XMLDB_KEY_UNIQUE, ['verify_hash']);
+            if (!$dbman->find_key_name($btable, $key)) {
+                $dbman->add_key($btable, $key);
             }
 
         } else {
