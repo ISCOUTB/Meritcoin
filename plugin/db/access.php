@@ -55,6 +55,7 @@ $capabilities = [
         'archetypes'   => [
             'manager' => CAP_ALLOW,
         ],
+        'clonepermissionsfrom' => 'local/meritcoin:manage',
     ],
 
     // ── Curso ─────────────────────────────────────────────────────────────────
@@ -96,10 +97,8 @@ $capabilities = [
     'local/meritcoin:viewmarketplace' => [
         'captype'      => 'read',
         'contextlevel' => CONTEXT_COURSE,
-        'archetypes'   => [
-            'student'        => CAP_ALLOW,
-            'editingteacher' => CAP_PREVENT,
-            'manager'        => CAP_PREVENT,
+        'archetypes' => [
+            'student' => CAP_ALLOW,
         ],
     ],
 
