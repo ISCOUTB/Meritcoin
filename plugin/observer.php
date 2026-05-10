@@ -44,9 +44,9 @@ class observer {
         $payload = json_encode([
             'event_id'   => $event_id,
             'event_type' => 'completion',
-            'student_id' => $userid,
-            'course_id'  => $courseid,
-            'wallet'     => $wallet ?? '',
+            'student_id' => (string)$userid,
+            'course_id' => (string)$courseid,
+            'student_wallet' => $wallet ?? '',
             'timestamp'  => $event->timecreated,
             'metadata'   => [
                 'course_shortname' => self::get_course_shortname($courseid),
@@ -134,9 +134,9 @@ class observer {
         $payload = json_encode([
             'event_id'   => $event_id,
             'event_type' => 'grade',
-            'student_id' => $userid,
-            'course_id'  => $courseid,
-            'wallet'     => $wallet ?? '',
+            'student_id' => (string)$userid,
+            'course_id' => (string)$courseid,
+            'student_wallet' => $wallet ?? '',
             'grade'      => $finalgrade,
             'timestamp'  => $event->timecreated,
             'metadata'   => [
