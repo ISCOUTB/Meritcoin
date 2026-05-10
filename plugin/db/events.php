@@ -20,13 +20,6 @@
  * Moodle lee este archivo para saber qué eventos observar.
  * Cada entrada asocia un evento del core con un método de nuestro observer.
  *
- * CÓMO FUNCIONA (explicación para no-expertos en Moodle):
- * ─────────────────────────────────────────────────────────
- * Moodle tiene un sistema de eventos: cuando un estudiante completa un curso
- * o recibe una calificación, Moodle "dispara" un evento. Nosotros registramos
- * aquí que queremos "escuchar" esos eventos. Cuando ocurren, Moodle llama
- * automáticamente al método que indicamos (por ejemplo, course_completed).
- *
  * @package    local_meritcoin
  * @copyright  2026 Universidad Tecnológica de Bolívar
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -36,20 +29,10 @@ defined('MOODLE_INTERNAL') || die();
 
 $observers = [
 
-    // ── Evento: Curso completado ────────────────────────────────────────
-    // Se dispara cuando un estudiante completa todos los requisitos de un curso.
-    // En Moodle: Administración del curso → Finalización del curso debe estar
-    // habilitada y configurada con criterios (actividades, calificación, etc.).
-    [
-        'eventname' => '\core\event\course_completed',
-        'callback'  => '\local_meritcoin\observer::course_completed',
-    ],
-
     // ── Evento: Calificación registrada ─────────────────────────────────
     // Se dispara cuando un profesor califica a un estudiante en cualquier
-    // actividad o cuando la calificación final del curso se actualiza.
-    // Usamos user_graded que cubre tanto calificaciones de actividades como
-    // la calificación final del curso.
+    // actividad. MeritCoin evalúa las reglas del curso y encola el evento
+    // si corresponde otorgar MRT.
     [
         'eventname' => '\core\event\user_graded',
         'callback'  => '\local_meritcoin\observer::user_graded',
