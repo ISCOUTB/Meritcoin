@@ -180,10 +180,6 @@ function local_meritcoin_get_user_stats(int $userid): array {
         "userid = :uid AND status IN ('pending','pending_wallet')",
         ['uid' => $userid]
     );
-    $completions = $DB->count_records('local_meritcoin_queue', [
-        'userid'     => $userid,
-        'event_type' => 'completion',
-    ]);
     $avg = $DB->get_field_sql(
         "SELECT AVG(grade) FROM {local_meritcoin_queue}
          WHERE userid = :uid AND event_type = 'grade' AND grade IS NOT NULL",
@@ -195,7 +191,6 @@ function local_meritcoin_get_user_stats(int $userid): array {
         'sent_events'    => $sent,
         'pending_events' => $pending,
         'failed_events'  => $failed,
-        'completions'    => $completions,
         'avg_grade'      => $avg !== null ? round((float)$avg, 1) : null,
     ];
 }
