@@ -55,6 +55,13 @@ if ($hassiteconfig) {
         PARAM_INT
     ));
 
+    $ADMIN->add('local_meritcoin', new admin_externalpage(
+        'local_meritcoin_pilot_courses',
+        get_string('pilotcourses', 'local_meritcoin'),
+        new moodle_url('/local/meritcoin/admin_pilot_courses.php'),
+        'local/meritcoin:manage'
+    ));
+
     // ── Páginas de administración ──────────────────────────────────────────────
     $ADMIN->add('localplugins',
         new admin_externalpage(
