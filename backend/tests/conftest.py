@@ -6,7 +6,7 @@ y mockea la blockchain para no necesitar Hardhat corriendo.
 """
 
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -58,13 +58,15 @@ async def mock_blockchain():
     """
     mock = MagicMock()
     mock.is_connected.return_value = True
-    mock.mint_badge.return_value = "0x" + "ab" * 32  # tx_hash simulado
-    mock.mint_mrt.return_value = "0x" + "cd" * 32
+    mock.mint_badge = AsyncMock(return_value="0x" + "ab" * 32)
+    mock.mint_mrt = AsyncMock(return_value="0x" + "cd" * 32)
+    mock.burn_mrt = AsyncMock(return_value="0x" + "ef" * 32)
     mock.get_badge_balance.return_value = 1
     mock.get_mrt_balance.return_value = ("100.0", "100000000000000000000")
 
     with patch("app.services.events_service.blockchain", mock), \
          patch("app.api.students.blockchain", mock), \
+         patch("app.services.badges_service.blockchain", mock), \
          patch("app.services.blockchain.blockchain", mock):
         yield mock
 
@@ -104,18 +106,24 @@ def make_event_payload(
     student_id: str = "STU-001",
     course_id: str = "COURSE-101",
     course_name: str = "Introducción a Blockchain",
-    event_type: str = "completion",
-    grade: float | None = None,
+    activity_id: str = "cmid-10",
+    activity_name: str = "Quiz 1",
+    event_type: str = "grade",        # ← era "completion", ahora "grade"
+    grade: float | None = 4.0,        # ← añadido default aprobatorio
+    coins_amount: float = 5.0,        # ← añadido, fuente de verdad del plugin
+    coin_symbol: str = "MRT",
 ) -> dict:
     """Genera un payload de evento académico para tests."""
-    payload = {
+    return {
         "event_id": event_id,
         "student_wallet": student_wallet,
         "student_id": student_id,
         "course_id": course_id,
         "course_name": course_name,
+        "activity_id": activity_id,
+        "activity_name": activity_name,
         "event_type": event_type,
+        "grade": grade,
+        "coins_amount": coins_amount,
+        "coin_symbol": coin_symbol,
     }
-    if grade is not None:
-        payload["grade"] = grade
-    return payload
