@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'redeem' && $rid > 0) {
     $redemption_id = $DB->insert_record('local_meritcoin_redemptions', $record);
 
     // ── Quemar MRT en Besu ────────────────────────────────────────────────────
-    $backend_url = get_config('local_meritcoin', 'backend_url');
+    $backend_url = get_config('local_meritcoin', 'api_url');
     if ($backend_url && $wallet) {
         $payload = json_encode([
             'student_id'     => (string)$USER->id,
