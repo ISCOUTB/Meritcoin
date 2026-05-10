@@ -1,11 +1,11 @@
 # Documentación de Arquitectura — MeritCoin
-## Formato ARC42 — Versión 0.4.0
+## Formato ARC42 — Versión 0.5.0
 
 **Proyecto:** MeritCoin — Sistema de Recompensas Académicas Digitales  
 **Institución:** Universidad Tecnológica de Bolívar  
-**Fecha:** Abril 2026  
-**Estado:** En desarrollo activo (Fase 9 de 10 en progreso — Insignias personalizadas)  
-**Rama principal de desarrollo:** `main` (fusionada desde `feature/transacciones-base`)
+**Fecha:** Mayo 2026  
+**Estado:** En desarrollo activo (Fase 11 de 11 en progreso — Despliegue en SAVIO + ajustes visuales)  
+**Rama principal de desarrollo:** `feature/besu` (en integración con `main`)
 
 ---
 
@@ -15,7 +15,7 @@
 
 MeritCoin es un sistema de incentivos académicos que integra la plataforma LMS Moodle con tecnología blockchain. Permite que los profesores configuren reglas de recompensa por actividad, tipo de actividad o curso, y que los estudiantes acumulen tokens digitales (MRT) e insignias verificables on-chain al completar logros académicos.
 
-El sistema opera de forma híbrida: la lógica de negocio y configuración vive off-chain (Moodle + PostgreSQL), mientras que la emisión de tokens e insignias queda registrada permanentemente on-chain (Ethereum EVM compatible).
+El sistema opera de forma híbrida: la lógica de negocio y configuración vive off-chain (Moodle + PostgreSQL), mientras que la emisión de tokens e insignias queda registrada permanentemente on-chain en una red EVM privada basada en **Hyperledger Besu**.
 
 ## 1.2 Objetivos de calidad
 
@@ -46,16 +46,18 @@ El sistema opera de forma híbrida: la lógica de negocio y configuración vive 
 |-------------|-------|
 | El plugin debe seguir la **Moodle Plugin API** estándar | Compatibilidad con Moodle 4.x y con SAVIO |
 | Los contratos usan únicamente **OpenZeppelin 5.x** (sin librerías de pago) | Licencia MIT, auditadas, sin dependencias propietarias |
-| El backend corre **dentro de Docker**; el nodo blockchain corre en la máquina host | Restricción de entorno de desarrollo en Windows con Docker Desktop |
+| El backend corre **dentro de Docker**; el nodo blockchain corre como servicio Besu en Docker | Restricción de entorno de desarrollo y futura producción |
 | No se almacenan datos personales on-chain | Privacidad: solo wallets e IDs ofuscados viajan a la blockchain |
 | El `backend/.env` es la fuente de configuración del backend | `config.py` lee variables de entorno desde el `.env` del servicio Docker |
 | El plugin usa `file_get_contents` (no cURL) para HTTP | El contenedor Bitnami Moodle tiene cURL deshabilitado por defecto |
+| El nodo blockchain en staging/producción es **Hyperledger Besu** (red privada EVM) | Compatibilidad con infraestructura institucional UTB; Besu es EVM-compatible y permite redes permisionadas |
+| El backend detecta automáticamente el cliente EVM via `web3_clientVersion` | Permite comportamiento adaptativo sin reconfiguración manual |
 
 ## 2.2 Restricciones organizacionales
 
 - El proyecto es académico; la infraestructura de producción target es **SAVIO** (Moodle institucional de la UTB).
 - El ajuste visual para SAVIO debe poder hacerse sin reescribir lógica de negocio.
-- Las claves privadas usadas en desarrollo (`0xac0974...`) son las cuentas públicas de Hardhat; nunca deben usarse en producción.
+- Las claves privadas usadas en desarrollo nunca deben usarse en producción.
 - El volumen del plugin en `docker-compose.yml` (`./plugin:/bitnami/moodle/local/meritcoin`) debe estar descomentado para que los cambios locales se reflejen en el contenedor.
 
 ---
@@ -94,7 +96,7 @@ El sistema opera de forma híbrida: la lógica de negocio y configuración vive 
 | Canal | Protocolo | Descripción |
 |-------|-----------|-------------|
 | Moodle → Backend | HTTP POST + HMAC-SHA256 (file_get_contents) | Envío de eventos académicos firmados |
-| Backend → Blockchain | JSON-RPC (web3.py) via `host.docker.internal:8545` | Llamadas a `mintBadge` y `mint` |
+| Backend → Blockchain | JSON-RPC (web3.py) vía `meritcoin-besu:8545` | Llamadas a `mintBadge` y `mint` |
 | Backend → PostgreSQL | asyncpg (SQLAlchemy async) | Persistencia del audit_log |
 | Plugin → MariaDB | Moodle DBAL | Persistencia de queue, rules, earnings, spend, rewards, redemptions |
 | Estudiante → Moodle | HTTPS (navegador) | Dashboard, marketplace, historial de transacciones |
@@ -132,7 +134,7 @@ La decisión de calcular `coins_amount` en el plugin (no en el backend) permite 
 |  +------------------+     +----------+-----------+   |
 |                                       |               |
 |                            +----------+----------+    |
-|                            | Blockchain (Hardhat)|    |
+|                            | Blockchain (Besu)|    |
 |                            | ERC-1155 + ERC-20   |    |
 |                            +---------------------+    |
 +-------------------------------------------------------+
@@ -142,7 +144,7 @@ La decisión de calcular `coins_amount` en el plugin (no en el backend) permite 
 
 | Componente | Responsabilidad |
 |------------|-----------------|
-| `observer.php` | Escucha `mod_completed` y `grade_item_updated`; filtra `itemtype=mod`; genera `event_id` MD5 deterministico para idempotencia |
+| `observer.php` | Escucha `mod_completed` y `grade_item_updated`; filtra `itemtype=mod`; genera `event_id` MD5 deterministico para idempotencia; verifica el límite de MRT por estudiante/curso (config `teacher_weekly_limit`, por defecto 16) antes de encolar |
 | `rules_service.php` | Resuelve reglas con prioridad: `activity` > `activity_type` > `course`; aplica `min_grade` si está configurado |
 | `send_events_task.php` | Tarea programada (Moodle Task API) que envía eventos `pending` al backend vía `file_get_contents` + HMAC |
 | `api_client.php` | Encapsula la comunicación HTTP con el backend; genera firma HMAC-SHA256 |
@@ -154,7 +156,7 @@ La decisión de calcular `coins_amount` en el plugin (no en el backend) permite 
 | `teacher_transactions.php` | Vista del profesor: monedas otorgadas y canjes del curso; KPIs; filtrable por estudiante |
 | `admin_marketplace.php` | Panel admin: KPIs globales, recompensas, canjes, pestaña “Todas las transacciones” filtrable por curso y estudiante |
 | `lib.php` | Hooks de navegación: menú global y navegación de curso por rol (estudiante/profesor/admin) |
-| `settings.php` | Configuración de administrador: URL backend, HMAC secret; registro de páginas externas admin |
+| `settings.php` | Configuración de administrador: URL backend, HMAC secret, límite MRT por estudiante/curso; registro de páginas externas admin |
 
 ## 5.3 Nivel 2 — Backend FastAPI (caja blanca)
 
@@ -163,7 +165,7 @@ La decisión de calcular `coins_amount` en el plugin (no en el backend) permite 
 | `api/events.py` | Endpoint `POST /events/ingest`: valida HMAC, delega a `events_service` |
 | `api/students.py` | Endpoints de consulta: `/balance`, `/badges`, `/summary` |
 | `services/events_service.py` | Orquesta el flujo: idempotencia → badges → tokens → audit |
-| `services/blockchain.py` | Wrapper web3.py: conecta a `host.docker.internal:8545`, llama `mintBadge` y `mint` |
+| `services/blockchain.py` | Wrapper web3.py: conecta a `meritcoin-besu:8545`, llama `mintBadge`, `mint` y `burn` |
 | `services/badges_service.py` | Genera metadatos Open Badges v2 y simula pin IPFS |
 | `services/tokens_service.py` | Calcula y llama mint de tokens ERC-20 |
 | `services/audit_service.py` | Registra resultado final en PostgreSQL |
@@ -175,7 +177,7 @@ La decisión de calcular `coins_amount` en el plugin (no en el backend) permite 
 | Contrato | Estándar | Funciones clave |
 |----------|----------|-----------------|
 | `MeritBadges1155.sol` | ERC-1155 | `mintBadge(address, tokenId, uri)` — emite una insignia única por logro |
-| `MeritCoinERC20.sol` | ERC-20 | `mint(address, amount)` — acuña tokens MRT al wallet del estudiante |
+| `MeritCoinERC20.sol` | ERC-20 | `mint(address, amount)`, `burn(address, amount)` — acuña o quema tokens MRT |
 
 Ambos contratos heredan `AccessControl` (roles `ISSUER_ROLE`, `MINTER_ROLE`) y `Pausable` de OpenZeppelin 5.x.
 
@@ -192,6 +194,8 @@ Moodle      Observer      rules_service    Queue(MariaDB)   Task          Backen
   |             |--itemtype=mod?|                |             |              |                |
   |             |--resolve_rules(courseid, userid, cmid, modtype, grade)      |                |
   |             |<----------coins_amount---------|             |              |                |
+  |             |--check_MRT_limit(courseid, userid, total+coins)             |                |
+  |             |  (si excede, descarta evento)  |             |              |                |
   |             |--insert(event_id_MD5, coins, pending)------->|              |                |
   |             |                                |             |              |                |
   |  (scheduler cada 1 min)                      |<--poll------|              |                |
@@ -249,14 +253,14 @@ Máquina host (Windows/Mac/Linux)
 │   ├── meritcoin-moodle      (Moodle 4.3, puertos 8080/8443)
 │   │   └── Volumen: ./plugin → /bitnami/moodle/local/meritcoin
 │   ├── meritcoin-postgres    (PostgreSQL 16, puerto 5432)
-│   └── meritcoin-mariadb     (MariaDB 10.11, puerto 3306)
+│   ├── meritcoin-mariadb     (MariaDB 10.11, puerto 3306)
+│   └── meritcoin-besu        (Hyperledger Besu, puerto 8545)
 │
-└── Procesos nativos
-    └── npx hardhat node   (puerto 8545)
-        └── scripts/deploy.js → MeritCoinERC20 + MeritBadges1155
+└── Herramientas locales
+    └── Hardhat CLI para compilar y desplegar contratos a la red Besu
 ```
 
-**Comunicación Docker → Host:** los contenedores usan `host.docker.internal:8545` para alcanzar el nodo Hardhat en la máquina host. La variable `BLOCKCHAIN_RPC_URL=http://host.docker.internal:8545` es obligatoria en `backend/.env`.
+**Comunicación entre servicios:** los contenedores usan `http://meritcoin-besu:8545` como `BLOCKCHAIN_RPC_URL` en `backend/.env`.
 
 **Nota crítica sobre el volumen del plugin:** la línea `- ./plugin:/bitnami/moodle/local/meritcoin` en `docker-compose.yml` debe estar descomentada. Si se comenta y se reinicia el servicio, el plugin desaparece de Moodle. Para restaurarlo: descomentar la línea y ejecutar `docker compose up -d --force-recreate moodle`.
 
@@ -268,13 +272,13 @@ Servidor UTB
 │   └── Plugin local_meritcoin instalado vía zip o directorio
 │
 ├── Backend FastAPI
-│   └── Apuntando a nodo EVM de producción (testnet pública o red privada)
+│   └── Apuntando a nodo Besu institucional
 │
-└── Nodo EVM
-    └── Hardhat en modo fork de testnet, o red privada Besu/Geth
+└── Nodo Hyperledger Besu
+    └── Red privada EVM de la UTB (génesis y config basadas en /besu)
 ```
 
-En SAVIO, `BLOCKCHAIN_RPC_URL` apuntará al nodo EVM institucional. El resto de la arquitectura no cambia; únicamente se ajustan variables de entorno y los templates visuales del plugin.
+En SAVIO, `BLOCKCHAIN_RPC_URL` apuntará al nodo Besu institucional. El resto de la arquitectura no cambia; únicamente se ajustan variables de entorno y los templates visuales del plugin.
 
 ---
 
@@ -334,6 +338,15 @@ Las reglas de recompensa tienen tres scopes con prioridad decreciente:
 | 3 (menor) | `course` | Aplica al completar el curso entero |
 
 Cada regla puede tener un campo `min_grade` opcional: si el evento incluye una calificación inferior al umbral, el evento se descarta sin encolar.
+
+
+## 8.7 Límite de MRT por estudiante por curso
+
+El observer del plugin verifica, antes de encolar cualquier evento relevante (por ejemplo de tipo `grade`), que el total de MRT ya recibidos por el estudiante en ese curso no supere el límite configurado (`teacher_weekly_limit`, visible en la UI como *Student MRT limit per course*).
+
+La consulta suma `SUM(coins_amount)` de todos los registros de `local_meritcoin_queue` para ese usuario y curso, sin filtro de fecha, por lo que el límite es acumulado a lo largo de todo el semestre. El valor por defecto es **16 MRT por curso y estudiante**.
+
+El consumo de MRT en el marketplace no libera cupo; el límite mide cuánto ha recibido en total del profesor, no cuánto conserva actualmente. Si una nueva emisión haría que el total supere el límite, el evento se descarta y no se envía al backend.
 
 ---
 
@@ -415,11 +428,25 @@ Cada regla puede tener un campo `min_grade` opcional: si el evento incluye una c
 - (+) El backend sigue teniendo su propia capa de idempotencia via `audit_log` (doble protección).
 - (-) Si el mismo estudiante mejora su calificación en la misma actividad y obtiene la misma nota, el evento es descartado (caso extremadamente raro, aceptado como trade-off).
 
+
+## ADR-008: Hyperledger Besu como nodo EVM de staging y producción
+
+**Contexto:** El entorno de desarrollo inicial utilizaba Hardhat como nodo EVM local. Para staging y producción en SAVIO se requiere un nodo EVM institucional permisionado, operado dentro de la infraestructura de la UTB.
+
+**Decisión:** Integrar Hyperledger Besu como nodo EVM definitivo para entornos institucionales. El backend es agnóstico al cliente EVM (detecta vía `web3_clientVersion`) y puede trabajar con Besu sin cambios de código. Hardhat se mantiene únicamente como herramienta de compilación y despliegue hacia Besu.
+
+**Consecuencias:**
+- (+) Besu es EVM-compatible: los contratos diseñados para Hardhat funcionan sin cambios sobre la red Besu.
+- (+) Permite redes privadas y permisionadas (IBFT 2.0), adecuadas para el entorno institucional UTB.
+- (+) Ya se verificó la compatibilidad en desarrollo contra Besu (logs de `web3_clientVersion` muestran `besu/...`).
+- (-) Requiere Java 21+ en el host donde corre Besu.
+- (-) El tiempo de bloque es configurable pero normalmente mayor que en Hardhat en modo instantáneo, introduciendo algo más de latencia en pruebas end-to-end.
+
 ---
 
 # 10. Esquema de Base de Datos
 
-## 10.1 MariaDB — Plugin Moodle (v0.4.0)
+## 10.1 MariaDB — Plugin Moodle (v0.5.0)
 
 | Tabla | Columnas clave | Propósito |
 |-------|---------------|-----------|
@@ -447,11 +474,12 @@ Cada regla puede tener un campo `min_grade` opcional: si el evento incluye una c
 | R-01 | **Riesgo** | IPFS simulado en producción invalida la verificabilidad de las insignias OBv2 | Alto | Integrar Pinata o nodo IPFS propio antes del despliegue en SAVIO (Fase 10) |
 | R-02 | **Riesgo** | Clave privada del deployer en `.env`; si se filtra, un atacante puede mintear tokens arbitrariamente | Alto | Usar HSM o cuenta multisig con Gnosis Safe en producción |
 | R-03 | **Deuda técnica** | Los tests de backend (pytest) no cubren todos los flujos nuevos con `rules_service` y marketplace | Medio | Revisar y actualizar en la siguiente iteración |
-| R-04 | **Riesgo** | El nodo Hardhat es local; no es un entorno de testnet pública | Medio | Migrar a Sepolia o Polygon Mumbai antes de SAVIO |
+| R-04 | **Riesgo** | La configuración de Besu en desarrollo puede diferir de la institucional si no se valida el génesis y los parámetros de consenso | Medio | Probar en staging con la configuración definitiva antes de desplegar en SAVIO |
 | R-05 | **Deuda técnica** | `file_get_contents` no permite timeout granular para llamadas al backend | Bajo | Evaluar habilitar cURL en el contenedor Bitnami o usar Guzzle en Fase 10 |
 | R-06 | **Deuda técnica** | No existe mecanismo de reintentos explícito para eventos `failed` en la cola | Bajo | Implementar lógica de retry con backoff en `send_events_task.php` |
-| R-07 | **Deuda técnica** | Las insignias personalizadas (imagen, nombre, descripción por curso) aún no están implementadas | Medio | En curso — Fase 9 activa |
+| R-07 | **Deuda técnica** | Los ajustes visuales finales para SAVIO aún no están implementados por completo | Medio | Completar en la fase de despliegue institucional |
 | R-08 | **Riesgo** | El volumen del plugin en docker-compose puede quedar comentado accidentalmente al reiniciar Docker | Bajo | Documentado en README; considerar healthcheck que valide el mount |
+| R-09 | **Deuda técnica** | La key de configuración `teacher_weekly_limit` limita realmente al estudiante por curso, no al teacher; solo se corrigieron los labels en la UI | Bajo | Renombrar la key en una migración futura de `upgrade.php`, preservando el valor existente |
 
 ---
 
@@ -467,9 +495,10 @@ Cada regla puede tener un campo `min_grade` opcional: si el evento incluye una c
 | 6 | Gestión de reglas por curso (manage.php, editrule.php, rules_service) | ✅ Completa |
 | 7 | Ledger de ganancias y gasto por curso (earnings, spend) | ✅ Completa |
 | 8 | Dashboard del estudiante + Mercado de recompensas | ✅ Completa |
-| 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | 🔄 En progreso |
-| 10 | Despliegue en SAVIO + ajuste visual al tema de la universidad | 📋 Pendiente |
+| 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | ✅ Completa |
+| 10 | Integración Hyperledger Besu (red privada EVM, génesis y validación E2E) | ✅ Completa |
+| 11 | Despliegue en SAVIO + ajuste visual al tema de la universidad | 🔄 En progreso |
 
 ---
 
-*Documento generado en Abril 2026 — MeritCoin v0.4.0 — Universidad Tecnológica de Bolívar*
+*Documento actualizado en Mayo 2026 — MeritCoin v0.5.0 — Universidad Tecnológica de Bolívar*

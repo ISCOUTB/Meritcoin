@@ -13,7 +13,7 @@ Desarrollado como proyecto académico en la **Universidad Tecnológica de Bolív
 +------------------+      HMAC/POST       +------------------+
 |                  |  ----------------->  |                  |
 |   Moodle (LMS)   |                      |  FastAPI Backend  |
-|  Plugin PHP v0.3 |  <-----------------  |   (off-chain)    |
+|  Plugin PHP v0.5 |  <-----------------  |   (off-chain)    |
 |                  |      JSON Response   |                  |
 +------------------+                      +--------+---------+
                                                    |
@@ -21,7 +21,7 @@ Desarrollado como proyecto académico en la **Universidad Tecnológica de Bolív
                                     v              v               v
                              +-----------+  +-----------+  +------------+
                              | PostgreSQL |  |   IPFS    |  | Blockchain |
-                             |  (audit)   |  | (simulado)|  | (Hardhat)  |
+                             |  (audit)   |  | (simulado)|  |  (Besu)    |
                              +-----------+  +-----------+  +------------+
                                                                 |
                                                      +----------+----------+
@@ -38,10 +38,11 @@ Desarrollado como proyecto académico en la **Universidad Tecnológica de Bolív
 
 1. Un estudiante completa una actividad o recibe una calificación en Moodle
 2. El **observer** del plugin captura el evento y resuelve las monedas según la regla configurada por el profesor en `local_meritcoin_rules`
-3. El evento se encola en `local_meritcoin_queue` (estado `pending` o `pending_wallet` si el estudiante aún no tiene wallet)
-4. Una **tarea programada** envía el evento al backend FastAPI firmado con HMAC-SHA256
-5. El backend genera metadatos **Open Badges v2 (OBv2)**, simula pin en IPFS y llama a los contratos: `mintBadge` (ERC-1155) y `mint` MRT (ERC-20)
-6. El resultado queda registrado en `local_meritcoin_earnings` (ganancias por curso) y en PostgreSQL (audit_log) para trazabilidad completa
+3. Se verifica que el estudiante no haya superado el **límite de MRT por curso** (configurable, por defecto 16) — si lo supera, el evento es descartado
+4. El evento se encola en `local_meritcoin_queue` (estado `pending` o `pending_wallet` si el estudiante aún no tiene wallet)
+5. Una **tarea programada** envía el evento al backend FastAPI firmado con HMAC-SHA256
+6. El backend genera metadatos **Open Badges v2 (OBv2)**, simula pin en IPFS y llama a los contratos: `mintBadge` (ERC-1155) y `mint` MRT (ERC-20) en **Besu**
+7. El resultado queda registrado en `local_meritcoin_earnings` (ganancias por curso) y en PostgreSQL (audit_log) para trazabilidad completa
 
 ---
 
@@ -55,24 +56,27 @@ meritcoin/
 │   └── scripts/deploy.js
 ├── backend/                      # FastAPI (procesamiento off-chain)
 │   ├── app/
-│   │   ├── api/                  # Endpoints: events, students
+│   │   ├── api/                  # Endpoints: events, students, tokens, badges
 │   │   ├── core/                 # Config, DB, seguridad HMAC
 │   │   ├── models/               # Pydantic + SQLAlchemy
 │   │   ├── services/             # Blockchain, badges, tokens, audit
 │   │   └── main.py
 │   └── tests/                    # 23 tests con pytest
+├── besu/                         # Configuración de red privada Hyperledger Besu
+│   ├── genesis.json              # Génesis de la red EVM privada
+│   └── config/                   # Configuración de nodos Besu
 ├── plugin/                       # Plugin Moodle local_meritcoin (PHP)
 │   ├── classes/
 │   │   ├── api_client.php        # Cliente HTTP hacia FastAPI
-│   │   ├── observer.php          # Captura eventos Moodle
+│   │   ├── observer.php          # Captura eventos Moodle + límite MRT por estudiante
 │   │   ├── rules_service.php     # Lógica de reglas y saldo por curso
 │   │   ├── form/
 │   │   │   └── rule_form.php     # Formulario Moodle para crear/editar reglas
 │   │   └── task/
 │   │       └── send_events_task.php  # Tarea programada de envío
 │   ├── db/
-│   │   ├── install.xml           # Schema completo (5 tablas)
-│   │   ├── upgrade.php           # Migraciones hasta v0.3.0 (2026042801)
+│   │   ├── install.xml           # Schema completo (7 tablas)
+│   │   ├── upgrade.php           # Migraciones hasta v0.5.0
 │   │   ├── access.php            # Capabilities: manage, viewqueue, manage_rules, view_report
 │   │   ├── events.php            # Eventos escuchados
 │   │   └── tasks.php             # Registro de tarea programada
@@ -82,21 +86,25 @@ meritcoin/
 │   ├── dashboard.php             # Dashboard del estudiante
 │   ├── manage.php                # Gestión de reglas por curso (profesor)
 │   ├── editrule.php              # Crear / editar una regla
+│   ├── rewards.php               # Gestión de recompensas del curso (profesor)
+│   ├── marketplace.php           # Mercado de recompensas (estudiante)
+│   ├── teacher_transactions.php  # Informe del profesor por curso
+│   ├── admin_marketplace.php     # Panel global del administrador
 │   ├── lib.php                   # Hooks de navegación global y de curso
 │   ├── settings.php              # Configuración de administrador
-│   └── version.php               # Versión del plugin (2026042801)
+│   └── version.php               # Versión del plugin (2026050904)
 ├── scripts/
 │   ├── test_e2e.py               # 8 pruebas E2E automatizadas
 │   ├── test_curl.py              # Generador de comandos curl
 │   └── GUIA_FASE5.md
-├── docker-compose.yml            # Moodle + MariaDB + PostgreSQL + Hardhat
+├── docker-compose.yml            # Moodle + MariaDB + PostgreSQL + Besu
 ├── .env.example
 └── README.md
 ```
 
 ---
 
-## Esquema de base de datos (v0.3.0)
+## Esquema de base de datos (v0.5.0)
 
 | Tabla | Propósito |
 |-------|-----------|
@@ -105,9 +113,21 @@ meritcoin/
 | `local_meritcoin_earnings` | Ledger de monedas ganadas por curso (saldo disponible) |
 | `local_meritcoin_spend` | Ledger de monedas gastadas en el mercado de recompensas |
 | `local_meritcoin_course_config` | Configuración de moneda por curso (nombre, símbolo, contrato ERC-20) |
+| `local_meritcoin_rewards` | Recompensas creadas por el profesor por curso |
+| `local_meritcoin_redemptions` | Historial de canjes de recompensas |
 
 El saldo gastable de un estudiante en un curso se calcula como:
 `earned (earnings) − spent (spend)`, de forma independiente por curso.
+
+---
+
+## Límite de MRT por estudiante por curso
+
+Cada estudiante puede recibir un máximo configurable de MRT en un curso durante todo el semestre (por defecto 16 MRT). Este límite se gestiona en **Administración del sitio → Plugins locales → MeritCoin → Student MRT limit per course**.
+
+El límite **no se reinicia**: acumula todo el historial del curso. Los MRT gastados en el marketplace siguen contando hacia el límite (se evalúa el total recibido, no el saldo actual).
+
+Cuando un evento provoca que el total histórico de MRT otorgados al estudiante en ese curso supere el límite, el observer lo descarta y no lo envía al backend.
 
 ---
 
@@ -128,6 +148,7 @@ El saldo gastable de un estudiante en un curso se calcula como:
 - **Node.js** 18+ y **npm**
 - **Python** 3.11+
 - **Git**
+- **Java** 21+ (requerido por Hyperledger Besu)
 
 ---
 
@@ -159,25 +180,28 @@ npm install
 npx hardhat test          # 19/19 tests
 ```
 
-### 4. Levantar nodo Hardhat y desplegar contratos
+### 4. Desplegar contratos en Besu
 
-**Terminal 1** — deja esta terminal abierta todo el tiempo:
+Asegúrate de que el servicio Besu esté levantado:
+
 ```bash
-cd contracts
-npx hardhat node
+docker compose up -d besu
 ```
 
-**Terminal 2:**
+Compila, prueba y despliega los contratos:
+
 ```bash
 cd contracts
-npx hardhat run scripts/deploy.js --network localhost
+npm install
+npx hardhat test          # 19/19 tests
+npx hardhat run scripts/deploy.js --network besu
 # Copiar las direcciones de contratos mostradas
 ```
 
 Verás algo así — copia ambas direcciones:
 ```
-MeritCoin ERC20 deployed to:    0x8A791620dd6260079BF849Dc5567aDC3F2FdC318
-MeritBadge ERC1155 deployed to: 0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6
+MeritCoin ERC20 deployed to:    0x...
+MeritBadge ERC1155 deployed to: 0x...
 ```
 
 ### 5. Configurar variables de entorno
@@ -186,14 +210,14 @@ Editar `backend/.env` con las direcciones del paso anterior:
 ```env
 DATABASE_URL=postgresql+asyncpg://meritcoin:meritcoin_pass@meritcoin-postgres:5432/meritcoin_db
 HMAC_SECRET=cambia-este-secreto-en-produccion
-BLOCKCHAIN_RPC_URL=http://host.docker.internal:8545
-DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-MRT_CONTRACT_ADDRESS=0x8A791620dd6260079BF849Dc5567aDC3F2FdC318
-BADGE_CONTRACT_ADDRESS=0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6
+BLOCKCHAIN_RPC_URL=http://meritcoin-besu:8545
+DEPLOYER_PRIVATE_KEY=<clave-privada-del-emisor>
+MRT_CONTRACT_ADDRESS=0x...
+BADGE_CONTRACT_ADDRESS=0x...
 DEBUG=true
 ```
 
-> ⚠️ El backend corre dentro de Docker. Usar `host.docker.internal` (no `127.0.0.1`) para apuntar al nodo Hardhat que corre en tu máquina local.
+> El backend corre dentro de Docker. Cuando Besu también corre dentro de Docker Compose, se recomienda usar el nombre del servicio `meritcoin-besu` como host del RPC.
 
 ### 6. Recrear el backend con las nuevas variables
 
@@ -203,7 +227,7 @@ Un simple `restart` no toma los cambios del `.env`. Hay que recrear el contenedo
 docker compose up -d --force-recreate backend
 ```
 
-Verificar que el backend está conectado al nodo Hardhat:
+Verificar que el backend está conectado al nodo Besu:
 ```bash
 curl http://localhost:8000/health
 # Debe mostrar: "blockchain_connected": true
@@ -222,22 +246,17 @@ ver los tokens reflejados en el dashboard y el mercado de recompensas.
 docker compose ps
 ```
 
-Deben aparecer como `running`: `meritcoin-moodle`, `meritcoin-mariadb`, `meritcoin-postgres`, `meritcoin-backend`.
+Deben aparecer como `running`: `meritcoin-moodle`, `meritcoin-mariadb`, `meritcoin-postgres`, `meritcoin-backend` y `meritcoin-besu`.
 
-Verificar que el nodo Hardhat está activo:
+Verificar que el nodo Besu está activo:
 ```bash
-curl http://localhost:8545 -X POST -H "Content-Type: application/json" \
-  --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-# Debe responder con: {"result":"0x8"} (o cualquier número de bloque)
+curl http://localhost:8545 -X POST -H "Content-Type: application/json"   --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
 ```
 
-Si el nodo no responde, levántalo en una terminal separada:
+Si Besu no responde:
 ```bash
-cd contracts
-npx hardhat node
+docker compose up -d besu
 ```
-
-Y vuelve a deployar los contratos y actualizar `backend/.env` con las nuevas direcciones (ver pasos 4 y 5).
 
 ### Paso 2 — Instalar el plugin en Moodle
 
@@ -252,10 +271,9 @@ Y vuelve a deployar los contratos y actualizar `backend/.env` con las nuevas dir
 3. Verifica que el plugin está montado:
    ```bash
    docker exec meritcoin-moodle ls /bitnami/moodle/local/meritcoin
-   # Debe listar: version.php, lib.php, dashboard.php, etc.
    ```
 4. Entra a Moodle como administrador: http://localhost:8080 (admin / Admin1234!)
-5. Ve a **Administración del sitio → Notificaciones** — Moodle detectará el plugin y pedirá actualizar la base de datos. Haz clic en **Continuar**.
+5. Ve a **Administración del sitio → Notificaciones** y completa la instalación/actualización del plugin.
 
 ### Paso 3 — Configurar el plugin
 
@@ -263,11 +281,10 @@ Y vuelve a deployar los contratos y actualizar `backend/.env` con las nuevas dir
 2. Configura:
    - **URL Backend**: `http://meritcoin-backend:8000`
    - **Secreto HMAC**: el mismo valor de `HMAC_SECRET` en `backend/.env`
+   - **Student MRT limit per course**: máximo de MRT que un estudiante puede recibir por curso (por defecto 16)
 3. Guarda los cambios.
 
 ### Paso 4 — Crear el campo de wallet en el perfil de usuario
-
-Este campo permite asignar una wallet de Hardhat a cada estudiante.
 
 1. Ve a **Administración del sitio → Usuarios → Campos de perfil de usuario**
 2. Crea un campo de tipo **Texto**:
@@ -275,42 +292,31 @@ Este campo permite asignar una wallet de Hardhat a cada estudiante.
    - Nombre: `Wallet Ethereum`
 3. Guarda.
 
-### Paso 5 — Crear un estudiante de prueba con wallet real
+### Paso 5 — Crear un estudiante de prueba con wallet válida de Besu
 
-Hardhat genera 20 wallets predeterminadas con 10,000 ETH cada una. Usa la primera:
+1. Crea un usuario de prueba en Moodle.
+2. Asigna en el campo **Wallet Ethereum** una dirección válida de la red Besu que estés usando para pruebas.
+3. Asegúrate de que esa wallet exista en tu red y pueda recibir tokens.
 
-```
-Dirección:     0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-Clave privada: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-```
-
-1. Ve a **Administración del sitio → Usuarios → Agregar usuario**
-2. Crea un usuario (ej. `estudiante1` / `Estudiante1234!`)
-3. En el perfil del usuario, busca el campo **Wallet Ethereum** y pega la dirección anterior
-4. Guarda.
-
-> ⚠️ **Importante**: si usas una wallet inventada (ej. `0x1234...`), los tokens se mintearán
-> a una dirección que no existe en el nodo Hardhat y el balance siempre será 0.
+> Si usas una wallet inválida o fuera de la red configurada, los tokens se mintearán a una dirección que no podrás consultar correctamente desde tu entorno de pruebas.
 
 ### Paso 6 — Crear un curso y configurar una regla de recompensa
 
-1. Crea un curso en Moodle (ej. "Matemáticas") y matricula al estudiante de prueba
-2. Agrega al menos una actividad con **finalización de actividad** habilitada
-3. En el menú lateral del curso ve a **MeritCoin → Gestión de reglas**
+1. Crea un curso en Moodle y matricula al estudiante de prueba.
+2. Agrega al menos una actividad con **finalización de actividad** habilitada.
+3. En el menú lateral del curso ve a **MeritCoin → Gestión de reglas**.
 4. Crea una regla:
-   - Tipo: **Por calificación** o **Por completar actividad**
-   - Actividad: selecciona la que creaste
-   - Monedas: ej. `10`
+   - Tipo: **Por actividad**, **por tipo de actividad** o **por curso**
+   - Monedas: por ejemplo `5`
 5. Guarda la regla.
 
 ### Paso 7 — Generar un evento desde Moodle
 
-1. Entra a Moodle como el estudiante de prueba
-2. Completa la actividad del curso (entrega la tarea, completa el quiz, etc.)
+1. Entra a Moodle como el estudiante de prueba.
+2. Completa la actividad del curso.
 3. Verifica que el evento fue encolado:
    ```bash
-   docker exec meritcoin-mariadb mysql -u bn_moodle -pmoodle_pass bitnami_moodle \
-     -e "SELECT userid, status, coins_amount FROM mdl_local_meritcoin_queue ORDER BY id DESC LIMIT 3;"
+   docker exec meritcoin-mariadb mysql -u bn_moodle -pmoodle_pass bitnami_moodle      -e "SELECT userid, status, coins_amount FROM mdl_local_meritcoin_queue ORDER BY id DESC LIMIT 3;"
    ```
 
 ### Paso 8 — Procesar la cola (enviar al backend)
@@ -318,33 +324,30 @@ Clave privada: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff8
 La tarea programada se ejecuta automáticamente cada minuto. Para forzarla manualmente:
 
 ```bash
-docker exec meritcoin-moodle php /bitnami/moodle/admin/cli/scheduled_task.php \
-  --execute=\\local_meritcoin\\task\\send_events_task
+docker exec meritcoin-moodle php /bitnami/moodle/admin/cli/scheduled_task.php   --execute=\local_meritcoin\task\send_events_task
 ```
 
-Verifica que el evento llegó al backend y se mintearon los tokens:
+Verifica que el evento llegó al backend:
 ```bash
-docker exec meritcoin-postgres psql -U meritcoin -d meritcoin_db \
-  -c "SELECT student_wallet, coins_amount, processed_at FROM events ORDER BY processed_at DESC LIMIT 5;"
+docker exec meritcoin-postgres psql -U meritcoin -d meritcoin_db   -c "SELECT event_id, student_wallet, coins_amount, processed_at FROM events ORDER BY processed_at DESC LIMIT 5;"
 ```
 
 ### Paso 9 — Verificar el balance en el dashboard
 
 Desde la API:
 ```bash
-curl -s http://localhost:8000/students/0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266/summary
-# Debe mostrar mrt_balance > 0 y la insignia ganada
+curl -s http://localhost:8000/students/<WALLET>/summary
 ```
 
 Desde Moodle: entra como el estudiante y ve a **MeritCoin → Mi Dashboard**.
-Debe mostrar el balance real del contrato y el badge ganado.
+Debe mostrar el balance real del contrato y la insignia ganada.
 
 ### Paso 10 — Probar el mercado de recompensas
 
-1. Como profesor/admin, ve al curso → **MeritCoin → Recompensas**
-2. Crea una recompensa con un precio en MRT menor o igual al balance del estudiante
-3. Entra como el estudiante al curso → **MeritCoin → Mercado**
-4. El estudiante solo podrá canjear recompensas con las monedas ganadas **en ese mismo curso**
+1. Como profesor/admin, ve al curso → **MeritCoin → Recompensas**.
+2. Crea una recompensa con un precio en MRT menor o igual al saldo del estudiante.
+3. Entra como el estudiante al curso → **MeritCoin → Mercado**.
+4. El estudiante solo podrá canjear recompensas con las monedas ganadas **en ese mismo curso**.
 
 ---
 
@@ -352,23 +355,20 @@ Debe mostrar el balance real del contrato y el badge ganado.
 
 **Limpiar BD del backend (PostgreSQL):**
 ```bash
-docker exec meritcoin-postgres psql -U meritcoin -d meritcoin_db \
-  -c "TRUNCATE TABLE audit_log, events RESTART IDENTITY CASCADE;"
+docker exec meritcoin-postgres psql -U meritcoin -d meritcoin_db   -c "TRUNCATE TABLE audit_log, events RESTART IDENTITY CASCADE;"
 ```
 
 **Limpiar cola y canjes en Moodle (MariaDB):**
 ```bash
-docker exec meritcoin-mariadb mysql -u bn_moodle -pmoodle_pass bitnami_moodle -e \
-  "DELETE FROM mdl_local_meritcoin_queue; DELETE FROM mdl_local_meritcoin_redemptions;"
+docker exec meritcoin-mariadb mysql -u bn_moodle -pmoodle_pass bitnami_moodle -e   "DELETE FROM mdl_local_meritcoin_queue; DELETE FROM mdl_local_meritcoin_redemptions;"
 ```
 
-**Reiniciar el nodo Hardhat (limpia el estado del contrato):**
+**Re-desplegar contratos y recrear backend:**
 ```bash
-# Ctrl+C en la terminal del nodo, luego:
-cd contracts && npx hardhat node
-# En otra terminal:
-cd contracts && npx hardhat run scripts/deploy.js --network localhost
-# Actualizar las nuevas direcciones en backend/.env y recrear el backend:
+cd contracts
+npx hardhat run scripts/deploy.js --network besu
+# Actualizar las nuevas direcciones en backend/.env
+cd ..
 docker compose up -d --force-recreate backend
 ```
 
@@ -383,6 +383,7 @@ docker compose up -d --force-recreate backend
 | GET | `/students/{wallet}/badges` | Listar insignias de un estudiante |
 | GET | `/students/{wallet}/balance` | Consultar saldo MRT global |
 | GET | `/students/{wallet}/summary` | Saldo MRT + badges (usado por el dashboard) |
+| POST | `/tokens/spend` | Quemar MRT al canjear en el marketplace |
 
 ---
 
@@ -400,12 +401,12 @@ Incluyen `AccessControl` (ISSUER_ROLE, MINTER_ROLE) y `Pausable` para emergencia
 
 ## Reglas de recompensa
 
-Las monedas se calculan en el plugin (no en el backend) a partir de las reglas
-configuradas por el profesor en cada curso.
+Las monedas se calculan en el plugin (no en el backend) a partir de las reglas configuradas por el profesor en cada curso.
 
 | Tipo de regla | Configuración | Comportamiento |
 |---|---|---|
 | **Por actividad** | `rule_scope = activity`, `cmid` específico | Se aplica solo al completar esa actividad |
+| **Por tipo de actividad** | `rule_scope = activity_type`, `mod_type` | Se aplica a todos los módulos del mismo tipo |
 | **Por curso** | `rule_scope = course`, `cmid = NULL` | Se aplica al completar el curso entero |
 
 El valor de monedas es un monto fijo (`coins_amount`) definido por el profesor.
@@ -417,7 +418,8 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 
 - **HMAC-SHA256**: toda comunicación Moodle → FastAPI está firmada
 - **Sin datos personales en blockchain**: solo wallets e IDs ofuscados
-- **Idempotencia**: eventos duplicados son rechazados por `event_id` único (índice en BD)
+- **Idempotencia**: eventos duplicados son rechazados por `event_id` único (MD5 determinístico de userid+cmid+grade)
+- **Límite MRT por estudiante**: el observer descarta eventos que exceden el tope configurado por curso
 - **Roles Moodle**: capabilities por contexto de curso, no globales
 - **Contratos**: `ISSUER_ROLE`, `MINTER_ROLE` y `Pausable`
 - **sesskey**: todas las acciones de escritura en el plugin usan `require_sesskey()`
@@ -433,7 +435,7 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 | Backend | FastAPI, SQLAlchemy async, web3.py, PostgreSQL 16 |
 | Plugin | PHP 8.x (Moodle Plugin API) |
 | Base de datos | MariaDB (Moodle) + PostgreSQL (Backend) |
-| Blockchain | Hardhat local node (desarrollo) |
+| Blockchain | Hyperledger Besu (red privada EVM) |
 
 ---
 
@@ -460,8 +462,9 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 | 6 | Gestión de reglas por curso (manage.php, editrule.php, rules_service) | ✅ Completa |
 | 7 | Ledger de ganancias y gasto por curso (earnings, spend) | ✅ Completa |
 | 8 | Dashboard del estudiante + Mercado de recompensas | ✅ Completa |
-| 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | 🔄 En progreso |
-| 10 | Despliegue en SAVIO + ajuste visual al tema de la universidad | 📋 Pendiente |
+| 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | ✅ Completa |
+| 10 | Integración Hyperledger Besu (red privada EVM) | ✅ Completa |
+| 11 | Despliegue en SAVIO + ajuste visual al tema de la universidad | 🔄 En progreso |
 
 ---
 
