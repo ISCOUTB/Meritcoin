@@ -97,8 +97,13 @@ async def _assert_teacher_can_award(
     Verifica que el estudiante tenga eventos registrados en el curso.
 
     Lanza HTTP 403 si no se encuentra ningún EventRecord que relacione
-    al estudiante con el curso, lo que indica que el profesor no tiene
-    autorización para otorgar insignias en ese contexto.
+    al estudiante con el curso.
+
+    NOTA: La verificación usa EventRecord.student_id tal como lo envía
+    el plugin Moodle (userid numérico como string). Si el student_id del
+    payload de BadgeAwardCreate difiere del formato enviado por el plugin,
+    esta verificación puede producir falsos 403.
+    TODO: validar consistencia de formato de student_id entre plugin y API.
     """
     query = (
         select(EventRecord)
