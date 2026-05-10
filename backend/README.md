@@ -1,285 +1,236 @@
-# Backend MeritCoin - API FastAPI
+# Backend MeritCoin (`meritcoin-backend`)
 
-Servicio off-chain que recibe eventos académicos de Moodle, genera metadatos
-Open Badges v2, interactúa con la blockchain (**Hyperledger Besu**) y registra todo en
-PostgreSQL para auditoría.
-
-Este servicio actúa como la capa de procesamiento entre el plugin Moodle
-(`local_meritcoin`) y los contratos inteligentes `MeritBadges1155` (ERC-1155)
-y `MeritCoinERC20` (ERC-20).
-
----
+Servicio FastAPI off-chain que recibe eventos académicos del plugin Moodle,
+valida la firma HMAC, acuña tokens MRT (ERC-20) e insignias (ERC-1155) en
+Hyperledger Besu, y registra toda la auditoría en PostgreSQL.
 
 ## Estructura
 
-```text
+```
 backend/
 ├── app/
 │   ├── api/
-│   │   ├── events.py          # POST /events/ingest (HMAC)
-│   │   ├── students.py        # GET /students/{wallet}/badges, /balance, /summary
-│   │   └── tokens.py          # POST /tokens/spend
+│   │   ├── events.py     # POST /events/ingest
+│   │   ├── students.py   # GET /students/{wallet}/badges|balance|summary
+│   │   ├── tokens.py     # POST /tokens/spend
+│   │   └── badges.py     # CRUD de skills, templates, awards y verificación pública
 │   ├── core/
-│   │   ├── config.py          # Settings con pydantic-settings
-│   │   ├── database.py        # AsyncSession (SQLAlchemy + asyncpg)
-│   │   └── security.py        # verify_hmac, compute_hmac
+│   │   ├── config.py     # Settings con pydantic-settings (variables de entorno)
+│   │   ├── database.py   # AsyncSession SQLAlchemy + asyncpg
+│   │   └── security.py   # verify_hmac (dependency), compute_hmac
 │   ├── models/
-│   │   ├── events.py          # AcademicEvent, EventResponse, StudentBadge, StudentBalance, StudentSummary
-│   │   └── audit.py           # EventRecord, AuditLog (tablas SQLAlchemy)
+│   │   ├── events.py     # AcademicEvent, EventResponse, StudentBadge, StudentBalance
+│   │   ├── audit.py      # EventRecord, AuditLog (tablas SQLAlchemy)
+│   │   ├── badges.py     # BadgeTemplate, BadgeAward, Skill (tablas SQLAlchemy)
+│   │   └── badges_schema.py  # Schemas Pydantic para badges
 │   ├── services/
-│   │   ├── events_service.py  # Orquestador del flujo completo
-│   │   ├── blockchain.py      # Wrapper web3.py para contratos
-│   │   ├── badges.py          # Generación de metadatos OBv2
-│   │   ├── tokens.py          # Lógica de mint/burn MRT
-│   │   └── audit.py           # Registro en PostgreSQL
+│   │   ├── events_service.py   # Orquestador del flujo completo de eventos
+│   │   ├── audit_service.py    # Idempotencia y auditoría en BD
+│   │   ├── blockchain.py       # Singleton BlockchainService (web3.py + asyncio.Lock)
+│   │   ├── badges_service.py   # CRUD de skills, templates y awards
+│   │   ├── tokens_service.py   # Cálculo de MRT (fallback si coins_amount = 0)
+│   │   └── certificate.py      # Generación de certificados PDF (ReportLab)
 │   ├── workers/
-│   │   └── ipfs.py            # Simulador de pin IPFS
-│   └── main.py                # FastAPI app, lifespan, routers
+│   │   └── ipfs.py             # Simulador de pin IPFS (desarrollo)
+│   └── main.py                 # FastAPI app, lifespan, CORS, routers
+├── alembic/                    # Migraciones de base de datos
 ├── tests/
-│   ├── conftest.py            # Fixtures: async DB, mock blockchain, HMAC
-│   ├── test_events.py         # Tests del endpoint /events/ingest
-│   ├── test_blockchain.py     # Tests del servicio blockchain
-│   └── test_students.py       # Tests de consulta de balance, badges y summary
+│   ├── conftest.py             # Fixtures: async DB, mock blockchain, HMAC
+│   ├── test_events.py          # Tests de /events/ingest
+│   ├── test_blockchain.py      # Tests del servicio blockchain
+│   └── test_students.py        # Tests de /students/
 ├── requirements.txt
-└── pytest.ini
+├── pytest.ini
+└── Dockerfile
 ```
-
----
 
 ## Responsabilidad del backend
 
-El backend **no** calcula las reglas pedagógicas ni decide cuántas monedas gana un estudiante: ese cálculo ocurre en el plugin Moodle. El backend recibe el evento ya resuelto (`coins_amount`), valida la firma HMAC, garantiza idempotencia, genera los metadatos de la insignia, ejecuta las transacciones on-chain y registra la auditoría.
+El backend **no** calcula cuántos MRT gana un estudiante — ese cálculo ocurre
+en el plugin Moodle según las reglas configuradas por curso y actividad. El
+backend recibe el evento con `coins_amount` ya calculado, valida la firma HMAC,
+garantiza idempotencia, acuña los tokens en blockchain y registra la auditoría.
 
-También expone endpoints de lectura para el dashboard del estudiante y endpoints operativos para el marketplace, incluyendo consulta de saldo y quema de MRT cuando un canje debe reflejarse on-chain.
+Adicionalmente expone endpoints para el dashboard del estudiante (saldo + badges)
+y el marketplace (quema de MRT al canjear recompensas).
 
----
+## Flujo de procesamiento de eventos
 
-## Dependencias principales
+```
+POST /events/ingest
+        │
+        ▼
+verify_hmac() — valida X-HMAC-Signature (401 si falla)
+        │
+        ▼
+AcademicEvent.model_validate_json() — validación Pydantic (422 si falla)
+        │
+        ▼
+audit_service.reserve_event() — inserta event_id en BD
+        │
+        ├─ event_id ya existe → status = "duplicate" (200, no reintenta)
+        │
+        ▼
+coins_amount del plugin = fuente de verdad
+        │
+        ├─ coins_amount = 0 → fallback local (WARNING en logs)
+        │
+        ▼
+blockchain.mint_mrt(wallet, amount)  ←── asyncio.Lock (serializa nonces)
+        │
+        ▼
+audit_service.record_audit() — registra tx_hash en AuditLog
+        │
+        ▼
+audit_service.mark_event_processed() — status = "processed"
+        │
+        ├─ Cualquier error → rollback + mark_event_failed (sesión independiente)
+        │
+        ▼
+EventResponse { event_id, status, mrt_tx, message }
+```
 
-| Paquete | Uso |
-|---------|-----|
-| fastapi | Framework web asíncrono |
-| uvicorn | Servidor ASGI |
-| pydantic / pydantic-settings | Validación y configuración |
-| sqlalchemy[asyncio] + asyncpg | Base de datos async |
-| web3 | Interacción con contratos EVM |
-| pytest + pytest-asyncio + httpx | Testing |
+## Endpoints
 
----
+### Sistema
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/health` | Estado del servicio y conexión a blockchain |
+
+### Eventos
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| POST | `/events/ingest` | HMAC | Recibe evento académico del plugin Moodle |
+
+### Estudiantes
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/students/{wallet}/badges` | Insignias del flujo automático (audit_log) |
+| GET | `/students/{wallet}/balance` | Saldo MRT desde blockchain |
+| GET | `/students/{wallet}/summary` | Balance + badges para dashboard Moodle |
+
+### Tokens
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/tokens/spend` | Quema MRT al canjear en marketplace |
+
+### Insignias (sistema manual)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/skills` | Listar skills |
+| POST | `/skills` | Crear skill |
+| POST | `/badges/templates` | Crear plantilla de insignia |
+| GET | `/badges/templates` | Listar plantillas |
+| GET | `/badges/templates/{id}` | Obtener plantilla |
+| PATCH | `/badges/templates/{id}` | Actualizar plantilla |
+| DELETE | `/badges/templates/{id}` | Eliminar plantilla (soft-delete si tiene awards) |
+| POST | `/badges/award` | Otorgar insignia a estudiante |
+| GET | `/badges/student/{student_id}` | Insignias de un estudiante |
+| DELETE | `/badges/award/{award_id}` | Revocar insignia |
+| GET | `/verify/{award_id}` | Verificación pública (sin auth) |
+| GET | `/badges/award/{award_id}/certificate` | Descargar certificado PDF |
+
+### Documentación interactiva
+
+```
+http://localhost:8000/docs      # Swagger UI
+http://localhost:8000/redoc     # ReDoc
+```
 
 ## Variables de entorno
 
 Crear archivo `backend/.env`:
 
 ```env
+# Base de datos
 DATABASE_URL=postgresql+asyncpg://meritcoin:meritcoin_pass@meritcoin-postgres:5432/meritcoin_db
+
+# Seguridad
 HMAC_SECRET=cambia-este-secreto-en-produccion
+
+# Blockchain (Hyperledger Besu)
 BLOCKCHAIN_RPC_URL=http://meritcoin-besu:8545
-DEPLOYER_PRIVATE_KEY=<clave-privada-del-emisor>
-BADGE_CONTRACT_ADDRESS=<direccion_despues_del_deploy>
-MRT_CONTRACT_ADDRESS=<direccion_despues_del_deploy>
+DEPLOYER_PRIVATE_KEY=<clave-privada-del-deployer>
+BADGE_CONTRACT_ADDRESS=<direccion-del-contrato-ERC1155>
+MRT_CONTRACT_ADDRESS=<direccion-del-contrato-ERC20>
+
+# URL pública del backend (usada en badge_uri y certificados)
+PUBLIC_BASE_URL=http://localhost:8000
+
+# Debug
 DEBUG=true
 ```
 
 ### Notas de configuración
 
-- Si el backend corre dentro de Docker Compose, usa `meritcoin-postgres` y `meritcoin-besu` como hosts.
-- Si lo ejecutas fuera de Docker, ajusta `DATABASE_URL` y `BLOCKCHAIN_RPC_URL` a `localhost` o a la IP correspondiente.
-- `DEPLOYER_PRIVATE_KEY` debe corresponder a la cuenta que tiene `ISSUER_ROLE` y `MINTER_ROLE` en los contratos.
-- En producción, esta clave **no** debe permanecer en texto plano ni reutilizar claves de desarrollo.
+- Si el backend corre dentro de Docker Compose, usa `meritcoin-postgres` y
+  `meritcoin-besu` como hosts. Si corre fuera, usa `localhost`.
+- `DEPLOYER_PRIVATE_KEY` debe corresponder a la cuenta con `MINTER_ROLE`
+  y `BURNER_ROLE` en los contratos.
+- Si `DEPLOYER_PRIVATE_KEY` no está configurada, el backend arranca igual
+  pero los endpoints de mint/burn fallarán con `RuntimeError`.
+- Si Besu no está disponible al arrancar, el servicio inicia igual;
+  el health check refleja el estado real de conexión.
 
----
+## Instalación y ejecución
 
-## Endpoints
+### Con Docker Compose (recomendado)
 
-### GET /health
+El backend se levanta automáticamente con el resto del sistema:
 
-Estado del servicio y conexión a blockchain.
-
-**Respuesta esperada:**
-```json
-{
-  "status": "ok",
-  "blockchain_connected": true,
-  "chain_id": 1337
-}
+```bash
+docker compose up -d
 ```
 
-> El `chain_id` exacto depende de la configuración de la red Besu.
+### En local (sin Docker)
 
-### POST /events/ingest
+```bash
+cd backend
 
-Recibe un evento académico firmado con HMAC-SHA256.
+# Crear entorno virtual
+python -m venv .venv
+source .venv/bin/activate        # Linux/Mac
+.venv\Scripts\activate           # Windows
 
-**Headers requeridos:**
-- `Content-Type: application/json`
-- `X-HMAC-Signature: <hmac-sha256-del-body>`
+# Instalar dependencias
+pip install -r requirements.txt
 
-**Body (AcademicEvent):**
-```json
-{
-  "event_id": "evt-moodle-12345",
-  "student_wallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-  "student_id": "STU-001",
-  "course_id": "COURSE-101",
-  "course_name": "Introduccion a Blockchain",
-  "activity_id": "cmid-55",
-  "activity_name": "Quiz 1",
-  "event_type": "grade",
-  "grade": 4.5,
-  "coins_amount": 5,
-  "timestamp": "2026-03-10T21:00:00Z"
-}
+# Configurar variables de entorno
+cp .env.example .env             # editar con tus valores
+
+# Levantar servidor
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
-**Tipos de evento comunes:**
-- `completion`
-- `grade`
+> **Nota Windows (Git Bash):** usar `python -m uvicorn` en lugar de `uvicorn`
+> directamente si el comando no está en PATH.
 
-**Respuesta (EventResponse):**
-```json
-{
-  "event_id": "evt-moodle-12345",
-  "status": "processed",
-  "badge_tx": "0xabc...",
-  "mrt_tx": "0xdef...",
-  "cid_ipfs": "Qm...",
-  "message": "Badge + 5 MRT"
-}
+## Tests
+
+```bash
+cd backend
+python -m pytest tests/ -v --tb=short
 ```
 
-**Errores comunes:**
-- `401`: Firma HMAC inválida.
-- `409`: Evento duplicado, si la implementación expone conflicto explícito.
-- `422`: Payload inválido.
-- `500`: Error interno al mintear o registrar auditoría.
+El suite de tests cubre:
 
-### GET /students/{wallet}/badges
-
-Lista todas las insignias emitidas a un wallet.
-
-**Respuesta:**
-```json
-[
-  {
-    "badge_id": 1,
-    "course_id": "COURSE-101",
-    "course_name": "Introduccion a Blockchain",
-    "event_type": "completion",
-    "uri": "ipfs://QmSimulated...",
-    "tx_hash": "0xabc...",
-    "issued_at": "2026-03-10T21:00:00Z"
-  }
-]
-```
-
-### GET /students/{wallet}/balance
-
-Consulta el saldo MRT directamente desde la blockchain.
-
-**Respuesta:**
-```json
-{
-  "wallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-  "balance_mrt": "100.0",
-  "balance_wei": "100000000000000000000"
-}
-```
-
-### GET /students/{wallet}/summary
-
-Devuelve una vista agregada para el dashboard del estudiante.
-
-**Respuesta:**
-```json
-{
-  "wallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-  "mrt_balance": "100.0",
-  "badges": [
-    {
-      "badge_id": 1,
-      "course_id": "COURSE-101",
-      "course_name": "Introduccion a Blockchain",
-      "event_type": "completion",
-      "uri": "ipfs://QmSimulated...",
-      "tx_hash": "0xabc...",
-      "issued_at": "2026-03-10T21:00:00Z"
-    }
-  ]
-}
-```
-
-### POST /tokens/spend
-
-Quema MRT cuando un canje del marketplace debe reflejarse on-chain.
-
-**Body de ejemplo:**
-```json
-{
-  "wallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-  "amount": 10,
-  "reason": "marketplace redemption"
-}
-```
-
-**Respuesta de ejemplo:**
-```json
-{
-  "status": "processed",
-  "wallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-  "amount": 10,
-  "tx_hash": "0x123..."
-}
-```
-
----
-
-## Flujo de procesamiento
-
-```text
-POST /events/ingest
-    │
-    ├─ 1. verify_hmac()          Valida firma X-HMAC-Signature
-    ├─ 2. Parsear AcademicEvent  Pydantic validation
-    ├─ 3. Verificar idempotencia Rechazar o ignorar si event_id ya existe
-    ├─ 4. Generar metadatos OBv2 JSON con assertion, badge, issuer
-    ├─ 5. Simular IPFS pin       Retorna CID simulado
-    ├─ 6. mintBadge (ERC-1155)   blockchain.mint_badge(wallet, id, uri)
-    ├─ 7. mint MRT (ERC-20)      blockchain.mint_tokens(wallet, amount)
-    ├─ 8. Registrar evento       PostgreSQL (events / audit_log)
-    └─ 9. Retornar EventResponse Con tx hashes y CID
-```
-
-### Flujo de gasto de tokens
-
-```text
-POST /tokens/spend
-    │
-    ├─ 1. Validar payload
-    ├─ 2. Verificar saldo on-chain
-    ├─ 3. Ejecutar burn MRT (ERC-20)
-    ├─ 4. Registrar auditoría
-    └─ 5. Retornar tx hash
-```
-
----
-
-## Metadatos de badges
-
-Por cada evento procesado, el backend genera metadatos compatibles con **Open Badges v2 (OBv2)**. En desarrollo, el pin en IPFS es simulado y retorna un CID sintético (`QmSimulated...`), suficiente para pruebas end-to-end y trazabilidad interna.
-
-El contenido de esos metadatos incluye, como mínimo:
-- Nombre y descripción del badge.
-- Curso o actividad asociada.
-- Wallet del receptor en forma ofuscada o derivada.
-- Fecha de emisión.
-- Referencia de verificación ligada al contrato ERC-1155.
-
----
+- Ingesta válida de eventos con HMAC correcto
+- Rechazo de firma HMAC inválida (401)
+- Detección y rechazo de eventos duplicados
+- Mint de MRT cuando el estudiante tiene wallet
+- Omisión del mint cuando no hay wallet
+- Consulta de balance, badges y summary
+- Manejo de errores de blockchain (Besu no disponible)
 
 ## Seguridad HMAC
 
-Toda petición POST al backend debe incluir el header `X-HMAC-Signature`. El cálculo es:
+Toda petición `POST /events/ingest` debe incluir el header `X-HMAC-Signature`.
+El cálculo es:
 
 ```python
 import hashlib, hmac
@@ -291,44 +242,50 @@ signature = hmac.new(
 ).hexdigest()
 ```
 
-Si la firma no coincide, el backend retorna HTTP 401.
-
----
-
-## Idempotencia y auditoría
-
-La idempotencia se basa en `event_id`. Si Moodle envía dos veces el mismo evento, el backend debe evitar reemitir la insignia y los MRT.
-
-Para eso, el backend registra el procesamiento en PostgreSQL y consulta ese historial antes de volver a ejecutar mint on-chain. Esto evita duplicados y preserva la trazabilidad de qué se intentó procesar, cuándo y con qué resultado.
-
----
-
-## Ejecutar en desarrollo
-
-```bash
-# Instalar dependencias
-cd backend
-pip install -r requirements.txt
-
-# Ejecutar tests
-python -m pytest tests/ -v
-
-# Levantar servidor
-python -m uvicorn app.main:app --reload --port 8000
+Equivalente en PHP (plugin Moodle):
+```php
+hash_hmac("sha256", $body, $hmac_secret)
 ```
 
-### Requisitos previos
+El backend usa `hmac.compare_digest()` para la comparación, evitando
+timing attacks. Si la firma no coincide retorna HTTP 401.
 
-- PostgreSQL activo.
-- Besu activo y accesible por RPC.
-- Contratos desplegados y direcciones cargadas en `backend/.env`.
-- Variables `HMAC_SECRET`, `BADGE_CONTRACT_ADDRESS` y `MRT_CONTRACT_ADDRESS` correctamente configuradas.
+## Idempotencia
 
-> Nota en Windows: usar `python -m uvicorn` en lugar de `uvicorn` directamente si el comando no está en PATH.
+La idempotencia se garantiza a nivel de `event_id`:
 
----
+1. Antes de cualquier mint, se inserta el `event_id` en `EventRecord` con
+   `status = "processing"`.
+2. Si el insert falla por `IntegrityError` (clave duplicada), el evento se
+   rechaza con `status = "duplicate"` sin reintentar el mint.
+3. Si el mint falla, se hace rollback completo y `mark_event_failed` abre
+   una sesión independiente para registrar el error sin depender de la
+   sesión rollbackeada.
 
-## Ejemplos de prueba
+Esto garantiza que un estudiante nunca recibe MRT dos veces por el mismo evento,
+incluso si el plugin Moodle reintenta el envío.
+
+## Concurrencia en blockchain
+
+`BlockchainService._send_tx` está protegido por un `asyncio.Lock` que
+serializa todas las transacciones del deployer. Esto evita el problema de
+nonce duplicado cuando llegan dos requests simultáneos (mint + burn al mismo
+tiempo), que causaría que una transacción falle con `nonce too low` en Besu.
+
+## Dependencias principales
+
+| Paquete | Versión | Uso |
+|---------|---------|-----|
+| fastapi | ≥0.111 | Framework web asíncrono |
+| uvicorn | ≥0.29 | Servidor ASGI |
+| pydantic / pydantic-settings | ≥2.0 | Validación y configuración |
+| sqlalchemy[asyncio] + asyncpg | ≥2.0 | Base de datos async |
+| alembic | ≥1.13 | Migraciones de BD |
+| web3 | ≥6.0 | Interacción con contratos EVM |
+| reportlab | ≥4.0 | Generación de certificados PDF |
+| pytest + pytest-asyncio + httpx | — | Testing |
+
+## Ejemplos de uso
 
 ### Health check
 
@@ -336,71 +293,86 @@ python -m uvicorn app.main:app --reload --port 8000
 curl http://localhost:8000/health
 ```
 
-### Ingesta de evento
-
-```bash
-curl -X POST http://localhost:8000/events/ingest   -H "Content-Type: application/json"   -H "X-HMAC-Signature: <firma>"   -d '{
-    "event_id": "evt-001",
-    "student_wallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "student_id": "STU-001",
-    "course_id": "COURSE-101",
-    "course_name": "Introduccion a Blockchain",
-    "activity_id": "cmid-10",
-    "activity_name": "Quiz 1",
-    "event_type": "grade",
-    "grade": 4.5,
-    "coins_amount": 5,
-    "timestamp": "2026-03-10T21:00:00Z"
-  }'
+Respuesta esperada:
+```json
+{
+  "status": "ok",
+  "blockchain_connected": true,
+  "badge_contract": "0xABC...",
+  "mrt_contract": "0xDEF..."
+}
 ```
 
-### Summary de estudiante
+### Ingesta de evento (con HMAC)
+
+```bash
+BODY='{"event_id":"evt-001","student_wallet":"0x70997970C51812dc3A010C7d01b50e0d17dc79C8","student_id":"42","course_id":"7","course_name":"Blockchain Aplicado","activity_id":"55","activity_name":"Quiz 1","event_type":"grade","grade":4.5,"coins_amount":5.0,"coin_symbol":"MRT","timestamp":"2026-05-10T14:00:00Z"}'
+
+SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "cambia-este-secreto-en-produccion" | awk '{print $2}')
+
+curl -X POST http://localhost:8000/events/ingest \
+  -H "Content-Type: application/json" \
+  -H "X-HMAC-Signature: $SIG" \
+  -d "$BODY"
+```
+
+Respuesta:
+```json
+{
+  "event_id": "evt-001",
+  "status": "processed",
+  "badge_tx": null,
+  "mrt_tx": "0xabc123...",
+  "cid_ipfs": null,
+  "message": "Evento evt-001 procesado | 5.0 MRT acuñados"
+}
+```
+
+### Consultar saldo MRT
+
+```bash
+curl http://localhost:8000/students/0x70997970C51812dc3A010C7d01b50e0d17dc79C8/balance
+```
+
+### Summary para dashboard
 
 ```bash
 curl http://localhost:8000/students/0x70997970C51812dc3A010C7d01b50e0d17dc79C8/summary
 ```
 
----
-
-## Tests
-
-El backend incluye pruebas para:
-
-- Ingesta válida de eventos.
-- Firma HMAC inválida.
-- Detección de eventos duplicados.
-- Mint de badges y tokens.
-- Consulta de balance, badges y summary.
-- Manejo de errores de blockchain y persistencia.
+### Canjear tokens MRT
 
 ```bash
-python -m pytest tests/ -v --tb=short
+curl -X POST http://localhost:8000/tokens/spend \
+  -H "Content-Type: application/json" \
+  -d '{
+    "student_id": "42",
+    "student_wallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "amount": 10.0,
+    "reward_id": "reward-abc",
+    "course_id": "7"
+  }'
 ```
 
----
+### Verificar insignia (sin auth)
+
+```bash
+curl http://localhost:8000/verify/<award_id>
+```
 
 ## Integración con el plugin Moodle
 
 El plugin `local_meritcoin` se encarga de:
-- Resolver las reglas pedagógicas por curso, actividad o tipo de actividad.
-- Aplicar el límite de MRT por estudiante/curso.
-- Encolar eventos en MariaDB.
-- Enviar eventos firmados al backend mediante una tarea programada.
+- Calcular `coins_amount` según reglas configuradas por curso/actividad
+- Aplicar el límite de MRT por estudiante/curso
+- Encolar eventos en MariaDB con idempotencia MD5
+- Enviar eventos firmados al backend via `send_events_task` (cron cada minuto)
+- Procesar canjes del marketplace via `process_redemptions_task`
 
 El backend se encarga de:
-- Validar autenticidad del evento.
-- Emitir badge y MRT en Besu.
-- Exponer saldo y badges para el dashboard.
-- Reflejar gasto on-chain cuando el marketplace ejecuta un canje.
-- Mantener la auditoría técnica en PostgreSQL.
-
----
-
-## Estado
-
-Backend alineado con la versión actual del proyecto:
-- Integración con **Hyperledger Besu**.
-- Endpoints de lectura para dashboard.
-- Soporte para gasto de MRT desde marketplace.
-- Trazabilidad off-chain en PostgreSQL.
-- Preparado para despliegue en SAVIO junto al resto del sistema.
+- Validar autenticidad del evento (HMAC)
+- Garantizar idempotencia a nivel de `event_id`
+- Acuñar MRT en Besu (o registrar sin mint si no hay wallet)
+- Exponer saldo y badges para el dashboard del estudiante
+- Quemar MRT cuando el marketplace ejecuta un canje confirmado
+- Mantener auditoría técnica completa en PostgreSQL
