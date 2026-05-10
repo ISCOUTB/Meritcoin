@@ -83,14 +83,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'redeem' && $rid > 0) {
     $record->rewardid    = $reward->id;
     $record->courseid    = $courseid;
     $record->coins_spent = $reward->price_mrt;
-    $record->tx_hash     = null; // se actualizará cuando el backend confirme
+    $record->tx_hash     = null;
     $record->timecreated = time();
 
-    $DB->insert_record('local_meritcoin_redemptions', $record);
+    $redemption_id = $DB->insert_record('local_meritcoin_redemptions', $record);
 
-    redirect(new moodle_url('/local/meritcoin/marketplace.php', ['courseid' => $courseid]),
-        get_string('marketplaceredeemed', 'local_meritcoin'), null,
-        \core\output\notification::NOTIFY_SUCCESS);
+    // ── Quemar MRT en Besu ────────────────────────────────────────────────────
+    $backend_url = get_config('local_meritcoin', 'backend_url');
+    if ($backend_url && $wallet) {
+        $payload = json_encode([
+            'student_id'     => (string)$USER->id,
+            'student_wallet' => $wallet,
+            'amount'         => (float)$reward->price_mrt,
+            'reward_id'      => (string)$reward->id,
+            'course_id'      => (string)$courseid,
+        ]);
+
+        $ch = curl_init($backend_url . '/tokens/spend');
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 10,
+        ]);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = $response ? json_decode($response, true) : null;
+        if (!empty($data['tx_hash'])) {
+            $DB->set_field('local_meritcoin_redemptions', 'tx_hash',
+                          $data['tx_hash'], ['id' => $redemption_id]);
+        }
+    }
 }
 
 // ── Datos para la vista ───────────────────────────────────────────────────────
