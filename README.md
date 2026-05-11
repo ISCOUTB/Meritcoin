@@ -1,38 +1,78 @@
 # MeritCoin — Sistema de Recompensas Académicas Digitales
 
-Sistema híbrido off-chain/on-chain que integra tokens de recompensa (ERC-20)
-e insignias digitales verificables (ERC-1155) con la plataforma Moodle.
+Plataforma híbrida off-chain/on-chain para recompensas académicas digitales,
+integrada con Moodle y respaldada por una red blockchain permissionada basada en Hyperledger Besu.
+
+El sistema permite emitir:
+
+- Tokens ERC-20 (`MeritCoin / MRT`)
+- Insignias verificables ERC-1155 (`MeritBadges`)
+
+La arquitectura combina:
+
+- Moodle Plugin API
+- FastAPI
+- Hyperledger Besu (QBFT)
+- PostgreSQL
+- Smart Contracts Solidity
+- Metadata distribuida compatible con IPFS
 
 Desarrollado como proyecto académico en la **Universidad Tecnológica de Bolívar**.
 
 ---
 
-## Arquitectura
+## Características principales
 
-```
-+------------------+      HMAC/POST       +------------------+
-|                  |  ----------------->  |                  |
-|   Moodle (LMS)   |                      |  FastAPI Backend  |
-|  Plugin PHP v0.5 |  <-----------------  |   (off-chain)    |
-|                  |      JSON Response   |                  |
-+------------------+                      +--------+---------+
-                                                   |
-                                    +--------------+---------------+
-                                    v              v               v
-                             +-----------+  +-----------+  +------------+
-                             | PostgreSQL |  |   IPFS    |  | Blockchain |
-                             |  (audit)   |  | (simulado)|  |  (Besu)    |
-                             +-----------+  +-----------+  +------------+
-                                                                |
-                                                     +----------+----------+
-                                                     v                     v
-                                              +-------------+      +-------------+
-                                              | ERC-1155    |      | ERC-20      |
-                                              | MeritBadges |      | MeritCoin   |
-                                              +-------------+      +-------------+
-```
+- Arquitectura híbrida off-chain/on-chain
+- Red blockchain privada permissionada
+- Consenso QBFT mediante Hyperledger Besu
+- Marketplace académico basado en MRT
+- Emisión verificable de badges ERC-1155
+- Integración completa con Moodle
+- Comunicación segura mediante HMAC-SHA256
+- Smart contracts compatibles con EVM
+- Infraestructura contenerizada con Docker
 
 ---
+
+## Arquitectura
+
+> ⚠️ Diagrama visual pendiente de actualización (`docs/images/architecture.png`)
+
+```text
++----------------------+
+| Moodle Plugin        |
+| PHP + Moodle API     |
++----------+-----------+
+           |
+           v
++----------------------+
+| FastAPI Backend      |
+| Blockchain Gateway   |
++----------+-----------+
+           |
+     +-----+------+
+     |            |
+     v            v
++---------+   +-------------------+
+|PostgreSQL|   | Metadata Storage |
+| Audit DB |   | IPFS-compatible  |
++---------+   +-------------------+
+                    |
+                    v
+      +----------------------------------+
+      | Hyperledger Besu QBFT Network    |
+      | Permissioned Validator Nodes     |
+      +----------------+-----------------+
+                       |
+             +---------+---------+
+             |                   |
+             v                   v
+      +-------------+     +-------------+
+      | ERC-1155    |     | ERC-20      |
+      | MeritBadges |     | MeritCoin   |
+      +-------------+     +-------------+
+```
 
 ## Flujo de funcionamiento
 
@@ -48,80 +88,74 @@ Desarrollado como proyecto académico en la **Universidad Tecnológica de Bolív
 
 ## Estructura del repositorio
 
-```
+```text
 meritcoin/
-├── contracts/                    # Solidity + Hardhat (ERC-1155 y ERC-20)
-│   ├── contracts/                # MeritBadges1155.sol, MeritCoinERC20.sol
-│   ├── test/                     # 19 tests con Hardhat + Chai
-│   └── scripts/deploy.js
-├── backend/                      # FastAPI (procesamiento off-chain)
+├── backend/                           # Backend FastAPI (procesamiento off-chain)
 │   ├── app/
-│   │   ├── api/                  # Endpoints: events, students, tokens, badges
-│   │   ├── core/                 # Config, DB, seguridad HMAC
-│   │   ├── models/               # Pydantic + SQLAlchemy
-│   │   ├── services/             # Blockchain, badges, tokens, audit
+│   │   ├── api/                       # Endpoints REST
+│   │   ├── core/                      # Configuración, DB, seguridad
+│   │   ├── models/                    # SQLAlchemy + Pydantic
+│   │   ├── services/                  # Blockchain, badges, tokens, audit
+│   │   ├── workers/                   # Procesamiento asíncrono
 │   │   └── main.py
-│   ├── alembic/                  # Migraciones de base de datos    
-│   ├── tests/                    # 23 tests con pytest
+│   ├── tests/                         # Tests backend
 │   ├── requirements.txt
 │   ├── pytest.ini
 │   └── Dockerfile
-├── besu/                         # Red privada Hyperledger Besu (QBFT, 4 nodos)
-│   └── QBFT-Network/
-│       ├── docker-compose.yml    # 4 nodos Besu en red QBFT
-│       ├── genesis.json          # Bloque génesis de la red EVM privada
-│       ├── qbftConfigFile.json   # Configuración del consenso QBFT
-│       └── networkFiles/         # Claves y datos de cada nodo
-├── plugin/                       # Plugin Moodle local_meritcoin (PHP)
+│
+├── contracts/                         # Smart contracts Solidity
+│   ├── contracts/
+│   │   ├── MeritCoinERC20.sol
+│   │   └── MeritBadges1155.sol
+│   ├── scripts/
+│   │   └── deploy.js
+│   ├── test/                          # Tests Hardhat + Chai
+│   ├── hardhat.config.js
+│   └── package.json
+│
+├── besu/
+│   └── QBFT-Network/                  # Red privada Hyperledger Besu
+│       ├── docker-compose.yml         # Red QBFT de 4 nodos
+│       ├── genesis.json               # Bloque génesis
+│       ├── qbftConfigFile.json        # Configuración QBFT
+│       └── networkFiles/              # Claves y datos de nodos
+│
+├── plugin/                            # Plugin Moodle local_meritcoin
 │   ├── classes/
-│   │   ├── api_client.php        # Cliente HTTP hacia FastAPI
-│   │   ├── observer.php          # Captura eventos Moodle + límite MRT por estudiante
-│   │   ├── rules_service.php     # Lógica de reglas y saldo por curso
+│   │   ├── api_client.php             # Cliente HTTP FastAPI
+│   │   ├── observer.php               # Captura de eventos Moodle
+│   │   ├── rules_service.php          # Reglas MRT por curso
 │   │   ├── form/
-│   │   │   └── rule_form.php     # Formulario Moodle para crear/editar reglas
 │   │   └── task/
-│   │       └── send_events_task.php  # Tarea programada de envío
 │   ├── db/
-│   │   ├── install.xml           # Schema completo (7 tablas)
-│   │   ├── upgrade.php           # Migraciones hasta v0.5.0
-│   │   ├── access.php            # Capabilities: manage, viewqueue, manage_rules, view_report
-│   │   ├── events.php            # Eventos escuchados
-│   │   └── tasks.php             # Registro de tarea programada
+│   │   ├── install.xml
+│   │   ├── upgrade.php
+│   │   ├── access.php
+│   │   ├── events.php
+│   │   └── tasks.php
 │   ├── lang/
-│   │   ├── en/local_meritcoin.php
-│   │   └── es/local_meritcoin.php
 │   ├── styles/
-│   │   └── dashboard.css             # Estilos del dashboard del estudiante
-│   ├── admin_marketplace.php         # Panel global del admin: todos los canjes
-│   ├── admin_pilot_courses.php       # Panel admin: gestión de cursos piloto
-│   ├── award_badge.php               # Interfaz para otorgar insignias manualmente a estudiantes
-│   ├── badge_award.php               # Vista de insignias otorgadas en un curso
-│   ├── badge_pdf.php                 # Generación de certificado PDF de una insignia
-│   ├── badge_templates.php           # Gestión de plantillas de insignias por curso
-│   ├── badge_types.php               # Gestión de tipos/categorías de insignias
-│   ├── badge_verify.php              # Verificación pública de insignias (Open Badges v2)
-│   ├── dashboard.php                 # Dashboard del estudiante (saldo MRT + insignias)
-│   ├── edit_badge_template.php       # Crear/editar plantilla de insignia
-│   ├── editrule.php                  # Crear / editar una regla de recompensa
-│   ├── lib.php                       # Funciones auxiliares y hooks de navegación
-│   ├── manage.php                    # Gestión de reglas por curso (profesor)
-│   ├── marketplace.php               # Mercado de recompensas (estudiante)
-│   ├── rewards.php                   # Gestión de recompensas del curso (profesor)
-│   ├── settings.php                  # Página de configuración admin
-│   ├── tasks.php                     # Registro auxiliar de tareas (raíz del plugin)
-│   ├── teacher_transactions.php      # Informe del profesor: transacciones por curso
-│   └── version.php                   # Metadatos del plugin
-├── scripts/
-│   ├── test_e2e.py               # 8 pruebas E2E automatizadas
-│   ├── test_curl.py              # Generador de comandos curl
+│   ├── dashboard.php
+│   ├── marketplace.php
+│   ├── rewards.php
+│   ├── manage.php
+│   ├── settings.php
+│   ├── lib.php
+│   └── version.php
+│
+├── scripts/                           # Scripts auxiliares y E2E
+│   ├── test_e2e.py
+│   ├── test_curl.py
 │   └── GUIA_FASE5.md
-├── docker-compose.yml            # Moodle + MariaDB + PostgreSQL + Backend
+│
+├── docs/                              # Diagramas y documentación adicional
+│   └── images/
+│
+├── docker-compose.yml                 # Stack principal
 ├── .env.example
-└── README.md
+├── README.md
+└── arc42-meritcoin.md
 ```
-
----
-
 ## Esquema de base de datos (v0.5.0)
 
 | Tabla | Propósito |
@@ -172,43 +206,7 @@ Cuando un evento provoca que el total histórico de MRT otorgados al estudiante 
 
 ## Inicio rápido
 
-### 0. Levantar la red Besu (QBFT — 4 nodos)
-
-La blockchain privada corre **de forma independiente** al docker-compose principal.
-Debe estar activa antes de desplegar los contratos y de arrancar el backend.
-
-```bash
-cd besu/QBFT-Network
-docker compose up -d
-```
-
-Esto levanta 4 nodos Hyperledger Besu con consenso QBFT:
-
-| Nodo | RPC HTTP | P2P |
-|------|----------|-----|
-| besu-node-1 | http://localhost:8545 | 30303 |
-| besu-node-2 | http://localhost:8546 | 30304 |
-| besu-node-3 | http://localhost:8547 | 30305 |
-| besu-node-4 | http://localhost:8548 | 30306 |
-
-El nodo **1** es el bootnode y el punto de entrada principal de la red.
-Los nodos 2, 3 y 4 se conectan automáticamente usando el enode del nodo 1.
-
-Verifica que la red está produciendo bloques:
-
-```bash
-curl -s http://localhost:8545 -X POST -H "Content-Type: application/json" \
-  --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-# Debe devolver un número de bloque en hex, p.ej. "0x5"
-```
-
-> **⚠️ Importante:** Para que el backend conecte con Besu desde dentro de Docker Compose,
-> la variable `BLOCKCHAIN_RPC_URL` debe apuntar a `http://host.docker.internal:8545`
-> (ya configurado así en `.env.example`).
-
----
-
-### 1. Clonar y configurar variables de entorno
+### 1. Clonar el repositorio
 
 ```bash
 git clone <url-del-repo>
@@ -216,311 +214,223 @@ cd meritcoin
 cp .env.example .env
 ```
 
-Edita `.env` y ajusta al menos estos valores antes de continuar:
-
-```env
-# Genera la clave Fernet ejecutando:
-# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-WALLET_ENCRYPTION_KEY=tu-clave-fernet-aqui   # ⚠️ OBLIGATORIO — el backend no arranca sin esto
-
-HMAC_SECRET=cambia-este-secreto-en-produccion
-DEPLOYER_PRIVATE_KEY=0xYOUR_PRIVATE_KEY_HERE  # Clave privada de la cuenta deployer en Besu
-```
-
-> `WALLET_ENCRYPTION_KEY` cifra las wallets custodiales de los estudiantes.
-> Sin esta clave el backend se niega a iniciar.
-
 ---
 
-### 2. Levantar servicios principales con Docker
+### 2. Levantar la red blockchain Besu (QBFT)
+
+La red blockchain corre de forma independiente al stack principal.
 
 ```bash
+cd besu/QBFT-Network
 docker compose up -d
 ```
 
-Primera vez tarda ~3-5 minutos (instalación automática de Moodle).
+Esto inicia:
 
-| Servicio | URL / Puerto |
-|----------|-------------|
-| Moodle | http://localhost:8080 (admin / Admin1234!) |
-| Backend FastAPI | http://localhost:8000 |
-| PostgreSQL | localhost:5432 |
+- 4 nodos Hyperledger Besu
+- consenso QBFT
+- red privada permissionada
+- validadores distribuidos
 
----
+| Nodo | RPC HTTP | P2P |
+|---|---|---|
+| besu-node-1 | localhost:8545 | 30303 |
+| besu-node-2 | localhost:8546 | 30304 |
+| besu-node-3 | localhost:8547 | 30305 |
+| besu-node-4 | localhost:8548 | 30306 |
 
-### 3. Instalar dependencias y probar los contratos
-
-```bash
-cd contracts
-npm install
-npx hardhat test          # 19/19 tests deben pasar
-```
-
----
-
-### 4. Desplegar contratos en la red Besu
-
-Asegúrate de que los 4 nodos Besu están corriendo (paso 0) antes de continuar.
-
-```bash
-cd contracts
-npx hardhat run scripts/deploy.js --network besu
-```
-
-Verás una salida similar a:
-
-```
-MeritCoin ERC20 deployed to:    0xABC123...
-MeritBadge ERC1155 deployed to: 0xDEF456...
-```
-
-**Copia ambas direcciones** — las necesitarás en el siguiente paso.
-
----
-
-### 5. Configurar el backend con las direcciones de los contratos
-
-Crea o edita `backend/.env` con los valores del deploy:
-
-```env
-DATABASE_URL=postgresql+asyncpg://meritcoin:meritcoin_pass@meritcoin-postgres:5432/meritcoin_db
-HMAC_SECRET=cambia-este-secreto-en-produccion
-BLOCKCHAIN_RPC_URL=http://host.docker.internal:8545
-DEPLOYER_PRIVATE_KEY=<clave-privada-del-emisor>
-MRT_CONTRACT_ADDRESS=0xABC123...       # dirección del ERC-20
-BADGE_CONTRACT_ADDRESS=0xDEF456...     # dirección del ERC-1155
-WALLET_ENCRYPTION_KEY=tu-clave-fernet-aqui
-DEBUG=true
-```
-
-> **Nota sobre RPC URL:** El backend corre dentro de Docker Compose. Para acceder a los
-> nodos Besu que corren en su propio `docker-compose` independiente, se usa
-> `host.docker.internal:8545`. En Linux puede ser necesario agregar
-> `--add-host=host.docker.internal:host-gateway` al servicio del backend.
-
----
-
-### 6. Recrear el backend con las nuevas variables
-
-Un simple `restart` no recarga el `.env`. Hay que recrear el contenedor:
-
-```bash
-docker compose up -d --force-recreate backend
-```
-
-Verifica que el backend está activo y conectado a Besu:
-
-```bash
-curl http://localhost:8000/health
-# Debe mostrar: "blockchain_connected": true
-```
-
----
-
-## Tutorial de pruebas completo (end-to-end desde Moodle)
-
-Este tutorial explica cómo probar el flujo completo del sistema desde Moodle hasta
-ver los tokens reflejados en el dashboard y el mercado de recompensas.
-
-### Paso 1 — Verificar que todos los servicios están corriendo
-
-```bash
-# Servicios principales
-docker compose ps
-
-# Nodos Besu (desde su propio directorio)
-cd besu/QBFT-Network && docker compose ps && cd ../..
-```
-
-Deben aparecer como `running`:
-- Stack principal: `meritcoin-moodle`, `meritcoin-mariadb`, `meritcoin-postgres`, `meritcoin-backend`
-- Stack Besu: `besu-node-1`, `besu-node-2`, `besu-node-3`, `besu-node-4`
-
-Verifica que la red Besu está produciendo bloques:
+Verificar generación de bloques:
 
 ```bash
 curl -s http://localhost:8545 -X POST -H "Content-Type: application/json" \
   --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
 ```
 
-Si algún nodo Besu no responde:
+---
+
+### 3. Levantar servicios principales
 
 ```bash
-cd besu/QBFT-Network
 docker compose up -d
 ```
 
-### Paso 2 — Instalar el plugin en Moodle
+Servicios principales:
 
-1. Abre `docker-compose.yml` (el principal, en la raíz) y **descomenta** esta línea bajo el servicio `moodle`:
-   ```yaml
-   - ./plugin:/bitnami/moodle/local/meritcoin
-   ```
-   > ⚠️ Si es la primera vez que levantas Moodle, primero deja que complete la instalación inicial **sin** esta línea montada, y solo entonces descoméntala.
-
-2. Recrea el contenedor de Moodle:
-   ```bash
-   docker compose up -d --force-recreate moodle
-   ```
-
-3. Verifica que el plugin está montado correctamente:
-   ```bash
-   docker exec meritcoin-moodle ls /bitnami/moodle/local/meritcoin
-   ```
-
-4. Entra a Moodle como administrador: http://localhost:8080 (admin / Admin1234!)
-
-5. Ve a **Administración del sitio → Notificaciones** y completa la instalación/actualización del plugin.
-
-### Paso 3 — Configurar el plugin
-
-1. Ve a **Administración del sitio → Plugins → Plugins locales → MeritCoin**
-2. Configura los siguientes campos:
-   - **URL Backend**: `http://meritcoin-backend:8000`
-   - **Secreto HMAC**: el mismo valor de `HMAC_SECRET` en `backend/.env`
-   - **Student MRT limit per course**: máximo de MRT que un estudiante puede recibir por curso (por defecto 16)
-3. Guarda los cambios.
-
-### Paso 4 — Crear el campo de wallet en el perfil de usuario
-
-1. Ve a **Administración del sitio → Usuarios → Campos de perfil de usuario**
-2. Crea un campo de tipo **Texto**:
-   - Nombre corto: `wallet`
-   - Nombre: `Wallet Ethereum`
-3. Guarda.
-
-### Paso 5 — Crear un estudiante de prueba con wallet válida de Besu
-
-1. Crea un usuario de prueba en Moodle.
-2. Asigna en el campo **Wallet Ethereum** una dirección válida de la red Besu que estés usando para pruebas.
-
-   Puedes obtener las cuentas preconfiguradas en el génesis consultando el nodo:
-   ```bash
-   curl -s http://localhost:8545 -X POST -H "Content-Type: application/json" \
-     --data '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1}'
-   ```
-
-3. Asegúrate de que esa wallet tiene saldo en la red (debe aparecer en `eth_accounts` o tener ETH preacuñado en el génesis).
-
-> Si usas una wallet inválida o fuera de la red configurada, el mint de tokens fallará y el evento quedará en estado de error en el backend.
-
-### Paso 6 — Crear un curso y configurar una regla de recompensa
-
-1. Crea un curso en Moodle y matricula al estudiante de prueba.
-2. Agrega al menos una actividad con **finalización de actividad** habilitada.
-3. En el menú lateral del curso ve a **MeritCoin → Gestión de reglas**.
-4. Crea una regla:
-   - Tipo: **Por actividad**, **por tipo de actividad** o **por curso**
-   - Monedas: por ejemplo `5`
-5. Guarda la regla.
-
-### Paso 7 — Generar un evento desde Moodle
-
-1. Entra a Moodle como el estudiante de prueba.
-2. Completa la actividad del curso.
-3. Verifica que el evento fue encolado:
-   ```bash
-   docker exec meritcoin-mariadb mysql -u bn_moodle -pmoodle_pass bitnami_moodle \
-     -e "SELECT userid, status, coins_amount FROM mdl_local_meritcoin_queue ORDER BY id DESC LIMIT 3;"
-   ```
-
-### Paso 8 — Procesar la cola (enviar al backend)
-
-La tarea programada se ejecuta automáticamente cada minuto. Para forzarla manualmente:
-
-```bash
-docker exec meritcoin-moodle php /bitnami/moodle/admin/cli/scheduled_task.php \
-  --execute=\local_meritcoin\task\send_events_task
-```
-
-Verifica que el evento llegó al backend y fue procesado:
-
-```bash
-docker exec meritcoin-postgres psql -U meritcoin -d meritcoin_db \
-  -c "SELECT event_id, student_wallet, coins_amount, processed_at FROM events ORDER BY processed_at DESC LIMIT 5;"
-```
-
-### Paso 9 — Verificar el balance en el dashboard
-
-Desde la API:
-
-```bash
-curl -s http://localhost:8000/students/<WALLET>/summary
-```
-
-Desde Moodle: entra como el estudiante y ve a **MeritCoin → Mi Dashboard**.
-Debe mostrar el balance real del contrato ERC-20 y la insignia ERC-1155 ganada.
-
-### Paso 10 — Probar el mercado de recompensas
-
-1. Como profesor/admin, ve al curso → **MeritCoin → Recompensas**.
-2. Crea una recompensa con un precio en MRT menor o igual al saldo del estudiante.
-3. Entra como el estudiante al curso → **MeritCoin → Mercado**.
-4. El estudiante solo podrá canjear recompensas con las monedas ganadas **en ese mismo curso**.
+| Servicio | URL |
+|---|---|
+| Moodle | http://localhost:8080 |
+| FastAPI Backend | http://localhost:8000 |
+| PostgreSQL | localhost:5432 |
 
 ---
 
-### Limpiar datos para repetir pruebas desde cero
-
-**Limpiar BD del backend (PostgreSQL):**
-
-```bash
-docker exec meritcoin-postgres psql -U meritcoin -d meritcoin_db \
-  -c "TRUNCATE TABLE audit_log, events RESTART IDENTITY CASCADE;"
-```
-
-**Limpiar cola y canjes en Moodle (MariaDB):**
-
-```bash
-docker exec meritcoin-mariadb mysql -u bn_moodle -pmoodle_pass bitnami_moodle -e \
-  "DELETE FROM mdl_local_meritcoin_queue; DELETE FROM mdl_local_meritcoin_redemptions;"
-```
-
-**Re-desplegar contratos y recrear backend:**
+### 4. Instalar dependencias de contratos
 
 ```bash
 cd contracts
-npx hardhat run scripts/deploy.js --network besu
-# Actualizar las nuevas direcciones en backend/.env
-cd ..
-docker compose up -d --force-recreate backend
+npm install
 ```
 
-**Reiniciar la red Besu desde cero (⚠️ elimina todos los bloques y estado):**
+Ejecutar tests:
 
 ```bash
-cd besu/QBFT-Network
-docker compose down -v
-docker compose up -d
+npx hardhat test
 ```
-
-> Después de reiniciar Besu debes re-desplegar los contratos, ya que las direcciones anteriores dejarán de existir.
 
 ---
 
+### 5. Desplegar contratos inteligentes
+
+```bash
+npx hardhat run scripts/deploy.js --network besu
+```
+
+Salida esperada:
+
+```text
+MeritCoin ERC20 deployed to:    0x...
+MeritBadge ERC1155 deployed to: 0x...
+```
+
+Copiar ambas direcciones.
+
+---
+
+### 6. Configurar variables del backend
+
+Editar:
+
+```text
+backend/.env
+```
+
+Variables principales:
+
+```env
+BLOCKCHAIN_RPC_URL=http://host.docker.internal:8545
+
+MRT_CONTRACT_ADDRESS=0x...
+BADGE_CONTRACT_ADDRESS=0x...
+
+DEPLOYER_PRIVATE_KEY=0x...
+
+HMAC_SECRET=change-this-secret
+
+WALLET_ENCRYPTION_KEY=your-fernet-key
+```
+
+---
+
+### 7. Reiniciar backend
+
+```bash
+docker compose up -d --force-recreate backend
+```
+
+Verificar conexión blockchain:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Respuesta esperada:
+
+```json
+{
+  "blockchain_connected": true
+}
+```
+
+## Flujo de pruebas end-to-end (E2E)
+
+El proyecto incluye un flujo completo de pruebas desde Moodle hasta la emisión de tokens e insignias en la red blockchain Besu.
+
+El flujo E2E cubre:
+
+1. Captura de eventos académicos desde Moodle
+2. Encolado de eventos en MariaDB
+3. Envío firmado mediante HMAC-SHA256
+4. Procesamiento en FastAPI
+5. Emisión de MRT (ERC-20)
+6. Emisión de badges ERC-1155
+7. Registro de auditoría en PostgreSQL
+8. Visualización en dashboard y marketplace
+
+---
+
+### Ejecutar pruebas E2E
+
+```bash
+python scripts/test_e2e.py
+```
+
+---
+
+### Verificar estado del backend
+
+```bash
+curl http://localhost:8000/health
+```
+
+---
+
+### Verificar generación de bloques Besu
+
+```bash
+curl -s http://localhost:8545 -X POST -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+```
+
+---
+
+### Documentación adicional
+
+| Documento | Descripción |
+|---|---|
+| `scripts/GUIA_FASE5.md` | Flujo completo de pruebas manuales |
+| `arc42-meritcoin.md` | Documentación de arquitectura |
+| `docs/images/` | Diagramas y arquitectura visual |
+
+
 ## API del backend
 
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/health` | Estado del servicio y conexión blockchain |
-| POST | `/events/ingest` | Recibir evento académico (requiere HMAC) |
-| GET | `/students/{wallet}/badges` | Listar insignias de un estudiante |
-| GET | `/students/{wallet}/balance` | Consultar saldo MRT global |
-| GET | `/students/{wallet}/summary` | Saldo MRT + badges (usado por el dashboard) |
-| POST | `/tokens/spend` | Quemar MRT al canjear en el marketplace |
+El backend FastAPI actúa como gateway entre Moodle y la red blockchain Besu.
 
+### Endpoints principales
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| GET | `/health` | Estado del backend y conexión blockchain |
+| POST | `/events/ingest` | Procesamiento de eventos académicos |
+| GET | `/students/{wallet}/summary` | Balance MRT + badges |
+| GET | `/students/{wallet}/balance` | Balance ERC-20 |
+| GET | `/students/{wallet}/badges` | Insignias ERC-1155 |
+| POST | `/tokens/spend` | Quema de MRT para marketplace |
+
+### Seguridad API
+
+- HMAC-SHA256
+- Validación de payloads
+- Idempotencia por `event_id`
+- Control de roles y permisos
+- Integración segura con Besu mediante JSON-RPC
 ---
 
 ## Contratos inteligentes
 
 | Contrato | Estándar | Descripción |
-|----------|----------|-------------|
-| `MeritBadges1155` | ERC-1155 | Insignias digitales con metadatos OBv2 |
-| `MeritCoinERC20` | ERC-20 | Token MRT de recompensa |
+|---|---|---|
+| `MeritCoinERC20` | ERC-20 | Token académico MRT |
+| `MeritBadges1155` | ERC-1155 | Insignias verificables |
 
-Ambos usan exclusivamente OpenZeppelin 5.x (sin librerías de pago).
-Incluyen `AccessControl` (ISSUER_ROLE, MINTER_ROLE) y `Pausable` para emergencias.
+### Características
 
+- OpenZeppelin 5.x
+- AccessControl
+- Pausable
+- Compatibilidad EVM
+- Integración Hyperledger Besu
+- Metadata Open Badges v2
 ---
 
 ## Reglas de recompensa
@@ -540,27 +450,34 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 
 ## Seguridad
 
-- **HMAC-SHA256**: toda comunicación Moodle → FastAPI está firmada
-- **Sin datos personales en blockchain**: solo wallets e IDs ofuscados
-- **Idempotencia**: eventos duplicados son rechazados por `event_id` único (MD5 determinístico de userid+cmid+grade)
-- **Límite MRT por estudiante**: el observer descarta eventos que exceden el tope configurado por curso
-- **Roles Moodle**: capabilities por contexto de curso, no globales
-- **Contratos**: `ISSUER_ROLE`, `MINTER_ROLE` y `Pausable`
-- **sesskey**: todas las acciones de escritura en el plugin usan `require_sesskey()`
-- **Wallets custodiales cifradas**: las claves privadas de los estudiantes se cifran con Fernet (AES-128-CBC) usando `WALLET_ENCRYPTION_KEY`
+La arquitectura implementa múltiples capas de seguridad:
+
+- Comunicación firmada mediante HMAC-SHA256
+- Validación de eventos académicos
+- Idempotencia contra duplicación de recompensas
+- Roles y permisos mediante AccessControl
+- Red blockchain permissionada
+- Wallets custodiales cifradas
+- Validación de transacciones blockchain
+- Separación off-chain/on-chain
+- Persistencia de auditoría en PostgreSQL
 
 ---
 
 ## Stack tecnológico
 
-| Componente | Tecnología |
-|------------|-----------|
-| LMS | Moodle 4.3 (Docker, imagen bitnamilegacy) |
-| Contratos | Solidity 0.8.28, OpenZeppelin 5.x, Hardhat 2.28 |
-| Backend | FastAPI, SQLAlchemy async, web3.py, PostgreSQL 16 |
-| Plugin | PHP 8.x (Moodle Plugin API) |
-| Base de datos | MariaDB 10.11 (Moodle) + PostgreSQL 16 (Backend) |
-| Blockchain | Hyperledger Besu (red privada QBFT, 4 nodos) |
+| Capa | Tecnología |
+|---|---|
+| LMS | Moodle 4.3 |
+| Plugin | PHP + Moodle Plugin API |
+| Backend | FastAPI + SQLAlchemy |
+| Smart Contracts | Solidity + OpenZeppelin |
+| Blockchain | Hyperledger Besu |
+| Consenso | QBFT |
+| Blockchain Client | web3.py |
+| Bases de datos | MariaDB + PostgreSQL |
+| Infraestructura | Docker Compose |
+| Metadata | Open Badges v2 + IPFS-compatible |
 
 ---
 
@@ -577,19 +494,32 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 
 ## Estado del proyecto
 
-| Fase | Descripción | Estado |
-|------|-------------|--------|
-| 1 | Entorno de desarrollo (Docker) | ✅ Completa |
-| 2 | Contratos inteligentes (Solidity) | ✅ Completa |
-| 3 | Backend FastAPI (Python) | ✅ Completa |
-| 4 | Plugin de Moodle — core (observer, task, queue) | ✅ Completa |
-| 5 | Prueba de flujo completo (E2E) | ✅ Completa |
-| 6 | Gestión de reglas por curso (manage.php, editrule.php, rules_service) | ✅ Completa |
-| 7 | Ledger de ganancias y gasto por curso (earnings, spend) | ✅ Completa |
-| 8 | Dashboard del estudiante + Mercado de recompensas | ✅ Completa |
-| 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | ✅ Completa |
-| 10 | Integración Hyperledger Besu (red privada QBFT, 4 nodos) | ✅ Completa |
-| 11 | Despliegue en SAVIO + ajuste visual al tema de la universidad | 🔄 En progreso |
+| Fase | Estado |
+|---|---|
+| Infraestructura Docker | ✅ |
+| Smart Contracts ERC-20 / ERC-1155 | ✅ |
+| Backend FastAPI | ✅ |
+| Plugin Moodle | ✅ |
+| Marketplace académico | ✅ |
+| Dashboard estudiantil | ✅ |
+| Integración Hyperledger Besu | ✅ |
+| Red QBFT permissionada | ✅ |
+| Auditoría distribuida | ✅ |
+| Testing E2E | ✅ |
+| Integración SAVIO | 🔄 |
+
+---
+
+## Roadmap
+
+Próximas líneas de evolución:
+
+- Observabilidad blockchain
+- Integración IPFS distribuida real
+- Gobernanza de validadores
+- Identidad descentralizada (DID)
+- Certificados académicos verificables
+- Despliegue institucional multi-nodo
 
 ---
 
