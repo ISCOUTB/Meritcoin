@@ -90,8 +90,9 @@ function local_meritcoin_extend_settings_navigation(settings_navigation $setting
         new pix_icon('i/settings', get_string('manage_rules', 'local_meritcoin'))
     );
 
-    // Tipos de insignia — solo admins/managers globales
-    if (has_capability('local/meritcoin:manage', context_system::instance())) {
+    // Tipos de insignia — admins globales Y profesores con awardbadges
+    $is_global_admin = has_capability('local/meritcoin:manage', context_system::instance());
+    if ($is_global_admin || has_capability('local/meritcoin:awardbadges', $context)) {
         $courseadmin->add(
             get_string('badge_types_menu', 'local_meritcoin'),
             new moodle_url('/local/meritcoin/badge_types.php'),
@@ -274,4 +275,15 @@ function local_meritcoin_render_navbar_output(\renderer_base $renderer) {
                     ' . get_string('mymeritcoin', 'local_meritcoin') . '
                 </span>
             </a>';
+}
+
+function local_meritcoin_user_has_teacher_role(): bool {
+    $courses = enrol_get_users_courses($GLOBALS['USER']->id, true);
+    foreach ($courses as $course) {
+        $ctx = context_course::instance($course->id);
+        if (has_capability('local/meritcoin:awardbadges', $ctx)) {
+            return true;
+        }
+    }
+    return false;
 }
