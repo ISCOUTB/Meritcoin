@@ -12,7 +12,11 @@ $confirm = optional_param('confirm', 0,   PARAM_INT);
 // ── Contexto y permisos ───────────────────────────────────────────────────────
 $context = context_system::instance();
 require_login();
-require_capability('moodle/site:config', $context);
+$is_admin = has_capability('moodle/site:config', $context);
+$is_teacher = !$is_admin && local_meritcoin_user_has_teacher_role();
+if (!$is_admin && !$is_teacher) {
+    throw new required_capability_exception($context, 'moodle/site:config', 'nopermissions', '');
+}
 
 $PAGE->set_url(new moodle_url('/local/meritcoin/badge_types.php'));
 $PAGE->set_context($context);

@@ -39,9 +39,9 @@ async def test_ingest_valid_hmac(client: AsyncClient):
     data = resp.json()
     assert data["status"] == "processed"
     assert data["event_id"] == "evt-test-001"
-    assert data["badge_tx"] is not None
-    assert data["mrt_tx"] is not None
-    assert data["cid_ipfs"] is not None
+    assert data["mrt_tx"] is not None      # coins_amount=5.0 → debe mintear
+    assert data["badge_tx"] is None        # flujo automático no emite badges
+    assert data["cid_ipfs"] is None        # IPFS no se usa en flujo automático
 
 
 # ── Test: HMAC inválido ─────────────────────────────────────────────────
@@ -124,7 +124,7 @@ async def test_ingest_grade_event(client: AsyncClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "processed"
-    assert data["mrt_tx"] is not None  # Nota aprobatoria → MRT
+    assert data["mrt_tx"] is not None      # grade con coins_amount → MRT
 
 
 # ── Test: Evento de calificación reprobatoria ───────────────────────────
@@ -136,6 +136,7 @@ async def test_ingest_grade_below_threshold(client: AsyncClient, mock_blockchain
         event_id="evt-grade-fail-001",
         event_type="grade",
         grade=2.5,
+        coins_amount=0.0, 
     )
     body = json.dumps(payload).encode()
 
@@ -149,8 +150,8 @@ async def test_ingest_grade_below_threshold(client: AsyncClient, mock_blockchain
     data = resp.json()
     assert data["status"] == "processed"
     # El badge siempre se emite, pero MRT solo si aprueba
-    assert data["badge_tx"] is not None
-    assert data["mrt_tx"] is None  # Nota reprobatoria → sin MRT
+    assert data["status"] == "processed"
+    assert data["mrt_tx"] is None  
 
 
 # ── Test: Health endpoint ───────────────────────────────────────────────

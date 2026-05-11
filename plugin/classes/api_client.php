@@ -56,7 +56,7 @@ class api_client {
      * No necesitas pasar parámetros manualmente.
      */
     public function __construct() {
-        $this->baseurl = rtrim((string)(get_config('local_meritcoin', 'api_url') ?: ''), '/');
+        $this->baseurl    = rtrim((string)(get_config('local_meritcoin', 'api_url') ?: ''), '/');
         $this->hmacsecret = (string)(get_config('local_meritcoin', 'hmac_secret') ?: '');
     }
 
@@ -65,45 +65,39 @@ class api_client {
      *
      * @param string $jsonpayload El payload JSON del evento (ya serializado).
      * @return object Objeto con propiedades:
-     *   - success (bool): true si el backend respondió correctamente.
+     *   - success (bool): true si el backend respondió correctamente (2xx o 409).
      *   - status_code (int): Código HTTP de respuesta.
      *   - body (string): Cuerpo de la respuesta.
      *   - error (string): Mensaje de error si hubo uno.
      */
     public function send_event(string $jsonpayload): object {
-        $result = new \stdClass();
+        $result              = new \stdClass();
         $result->success     = false;
         $result->status_code = 0;
         $result->body        = '';
         $result->error       = '';
 
-        // Validar configuración.
+        // Validar JSON.
         json_decode($jsonpayload, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             $result->error = 'Invalid JSON payload: ' . json_last_error_msg();
             return $result;
         }
+
         if (empty($this->baseurl)) {
             $result->error = 'API URL is not configured in plugin settings.';
             return $result;
         }
+
         if (empty($this->hmacsecret)) {
             $result->error = 'HMAC secret is not configured in plugin settings.';
             return $result;
         }
 
         // ── Calcular firma HMAC-SHA256 ──────────────────────────────────
-        // La firma se calcula sobre el body (JSON) completo.
-        // El backend recalcula la misma firma y compara.
-        // Si no coinciden, responde 401.
         $signature = hash_hmac('sha256', $jsonpayload, $this->hmacsecret);
 
-        // ── Construir URL del endpoint ──────────────────────────────────
-        $url = $this->baseurl . '/events/ingest';
-
         // ── Enviar con curl de Moodle ───────────────────────────────────
-        // Moodle tiene su propia clase curl que maneja proxy, SSL, timeouts, etc.
-        // Es preferible a usar php curl directamente.
         $curl = new \curl();
         $curl->setHeader([
             'Content-Type: application/json',
@@ -111,19 +105,16 @@ class api_client {
             'X-HMAC-Signature: ' . $signature,
         ]);
 
-        // Timeout de 30 segundos (el backend debería responder mucho antes).
-        $options = [
+        $response = $curl->post($this->baseurl . '/events/ingest', $jsonpayload, [
             'CURLOPT_TIMEOUT'        => 30,
             'CURLOPT_CONNECTTIMEOUT' => 10,
             'CURLOPT_RETURNTRANSFER' => true,
-        ];
-
-        $response = $curl->post($url, $jsonpayload, $options);
+        ]);
 
         // ── Procesar respuesta ──────────────────────────────────────────
-        $info = $curl->get_info();
+        $info                = $curl->get_info();
         $result->status_code = (int)($info['http_code'] ?? 0);
-        $result->body = is_string($response) ? $response : '';
+        $result->body        = is_string($response) ? $response : '';
 
         $curlerror = $curl->get_errno();
         if ($curlerror) {
@@ -131,18 +122,90 @@ class api_client {
             return $result;
         }
 
-        if ($result->status_code >= 200 && $result->status_code < 300) {
+        // 2xx = éxito, 409 = duplicado idempotente (también éxito)
+        if (($result->status_code >= 200 && $result->status_code < 300)
+            || $result->status_code === 409) {
             $result->success = true;
         } else {
-           $decoded = json_decode($result->body, true);
+            $decoded = json_decode($result->body, true);
             if (is_array($decoded)) {
-                $detail = $decoded['detail'] ?? $decoded['message'] ?? null;
-               $result->error = $detail ? "HTTP {$result->status_code}: {$detail}" : "HTTP {$result->status_code}: {$result->body}";
+                $detail        = $decoded['detail'] ?? $decoded['message'] ?? null;
+                $result->error = $detail
+                    ? "HTTP {$result->status_code}: {$detail}"
+                    : "HTTP {$result->status_code}: {$result->body}";
             } else {
-               $result->error = "HTTP {$result->status_code}: {$result->body}";
-           }
+                $result->error = "HTTP {$result->status_code}: {$result->body}";
+            }
         }
 
         return $result;
+    }
+
+    /**
+     * Obtiene el resumen de un estudiante desde el backend.
+     *
+     * @param string $wallet Dirección Ethereum del estudiante (0x...).
+     * @return array|null Array con mrt_balance y badges, o null si falla.
+     */
+    public function get_student_summary(string $wallet): ?array {
+        if (empty($this->baseurl)) {
+            return null;
+        }
+
+        // ── AÑADIR ESTE GUARD ────────────────────────
+        if (empty($this->hmacsecret)) {
+            return null;
+        }
+
+        $curl = new \curl();
+        $curl->setHeader([
+            'Accept: application/json',
+            'X-HMAC-Signature: ' . hash_hmac('sha256', $wallet, $this->hmacsecret),
+        ]);
+
+        $url      = $this->baseurl . '/students/' . urlencode($wallet) . '/summary';
+        $response = $curl->get($url, [], [
+            'CURLOPT_TIMEOUT'        => 5,
+            'CURLOPT_CONNECTTIMEOUT' => 3,
+            'CURLOPT_RETURNTRANSFER' => true,
+        ]);
+
+        $info     = $curl->get_info();
+        $httpcode = (int)($info['http_code'] ?? 0);
+
+        if ($curl->get_errno() || $httpcode !== 200) {
+            return null;
+        }
+
+        $data = json_decode($response, true);
+        return is_array($data) ? $data : null;
+    }
+
+    public function post(string $endpoint, array $data): ?array {
+        if (empty($this->baseurl)) return null;
+
+        $jsonpayload = json_encode($data);
+        $signature   = hash_hmac('sha256', $jsonpayload, $this->hmacsecret);
+
+        $curl = new \curl();
+        $curl->setHeader([
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'X-HMAC-Signature: ' . $signature,
+        ]);
+
+        $response = $curl->post($this->baseurl . $endpoint, $jsonpayload, [
+            'CURLOPT_TIMEOUT'        => 30,
+            'CURLOPT_CONNECTTIMEOUT' => 10,
+            'CURLOPT_RETURNTRANSFER' => true,
+        ]);
+
+        $info = $curl->get_info();
+        $code = (int)($info['http_code'] ?? 0);
+
+        if ($code >= 200 && $code < 300 || $code === 409) {
+            return json_decode($response, true) ?? [];
+        }
+        return null;
     }
 }

@@ -2,6 +2,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 if ($hassiteconfig) {
+
+    // ── Página de configuración principal ─────────────────────────────────────
     $settings = new admin_settingpage(
         'local_meritcoin',
         get_string('pluginname', 'local_meritcoin')
@@ -43,35 +45,44 @@ if ($hassiteconfig) {
         PARAM_ALPHANUMEXT
     ));
 
-    $ADMIN->add('localplugins', $settings);
-
-
-    // ── Límite de emisión de MRT por profesor ─────────────────────────────────
     $settings->add(new admin_setting_configtext(
-        'local_meritcoin/student_limit',
-        get_string('student_limit', 'local_meritcoin'),
-        get_string('student_limit_desc', 'local_meritcoin'),
-        16, 
+        'local_meritcoin/student_course_limit',
+        get_string('student_course_limit', 'local_meritcoin'),
+        get_string('student_course_limit_desc', 'local_meritcoin'),
+        16,
         PARAM_INT
     ));
 
-    // ── Páginas de administración ──────────────────────────────────────────────
-    $ADMIN->add('localplugins',
-        new admin_externalpage(
-            'local_meritcoin_marketplace',
-            get_string('adminmarketplacetitle', 'local_meritcoin'),
-            new moodle_url('/local/meritcoin/admin_marketplace.php')
-        )
-    );
+    // ── Categoría raíz visible al nivel de "Development" ──────────────────────
+    $ADMIN->add('root', new admin_category(
+        'local_meritcoin_cat',
+        get_string('pluginname', 'local_meritcoin')
+    ));
 
-    // ── Gestión de tipos de insignia ─────────────────────────────────────────────
-    $ADMIN->add('localplugins',
-        new admin_externalpage(
-            'local_meritcoin_badge_types',
-            get_string('badge_types_title', 'local_meritcoin'),
-            new moodle_url('/local/meritcoin/badge_types.php'),
-            'moodle/site:config'
-        )
-    );
+    // Configuración principal dentro de la categoría
+    $ADMIN->add('local_meritcoin_cat', $settings);
 
+    // Cursos piloto
+    $ADMIN->add('local_meritcoin_cat', new admin_externalpage(
+        'local_meritcoin_pilot_courses',
+        get_string('pilotcourses', 'local_meritcoin'),
+        new moodle_url('/local/meritcoin/admin_pilot_courses.php'),
+        'local/meritcoin:manage'
+    ));
+
+    // Marketplace panel
+    $ADMIN->add('local_meritcoin_cat', new admin_externalpage(
+        'local_meritcoin_marketplace',
+        get_string('adminmarketplacetitle', 'local_meritcoin'),
+        new moodle_url('/local/meritcoin/admin_marketplace.php'),
+        'local/meritcoin:manage'
+    ));
+
+    // Tipos de insignia
+    $ADMIN->add('local_meritcoin_cat', new admin_externalpage(
+        'local_meritcoin_badge_types',
+        get_string('badge_types_title', 'local_meritcoin'),
+        new moodle_url('/local/meritcoin/badge_types.php'),
+        'moodle/site:config'
+    ));
 }

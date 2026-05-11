@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - [http://moodle.org/](http://moodle.org/)
+// This file is part of Moodle - http://moodle.org/
 // ...licencia...
 
 defined('MOODLE_INTERNAL') || die();
@@ -10,32 +10,37 @@ require_once($CFG->libdir . '/filelib.php');
 // NAVEGACIÓN — Moodle 4.x
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function local_meritcoin_extend_navigation(global_navigation $nav) {
-    global $USER;
-
+function local_meritcoin_is_student_only(): bool {
     if (!isloggedin() || isguestuser()) {
-        return;
+        return false;
     }
-
-    $courses = enrol_get_users_courses($USER->id, true);
+    // Admins y managers globales nunca son "solo estudiantes"
+    if (is_siteadmin() || has_capability('moodle/site:config', context_system::instance())) {
+        return false;
+    }
+    // Si tiene manage_rules o managerewards en CUALQUIER curso => teacher/manager
+    $courses = enrol_get_users_courses($GLOBALS['USER']->id, true);
     foreach ($courses as $course) {
         $ctx = context_course::instance($course->id);
         if (has_capability('local/meritcoin:managerewards', $ctx) ||
             has_capability('local/meritcoin:manage_rules', $ctx)) {
-            return;
+            return false;
         }
     }
+    return true;
+}
 
-    $node = navigation_node::create(
+function local_meritcoin_extend_navigation(global_navigation $nav) {
+    if (!local_meritcoin_is_student_only()) { return; }
+
+    $nav->add_node(navigation_node::create(
         get_string('pluginname', 'local_meritcoin'),
         new moodle_url('/local/meritcoin/dashboard.php'),
         navigation_node::TYPE_CUSTOM,
         null,
         'local_meritcoin_primary',
         new pix_icon('i/badge', get_string('pluginname', 'local_meritcoin'))
-    );
-
-    $nav->add_node($node);
+    ));
 }
 
 function local_meritcoin_extend_navigation_user_settings($nav, $context) {
@@ -45,9 +50,7 @@ function local_meritcoin_extend_navigation_user_settings($nav, $context) {
         return;
     }
 
-    if ($context->userid !== $USER->id || !isloggedin() || isguestuser()) {
-        return;
-    }
+    if ($context->userid !== $USER->id || !local_meritcoin_is_student_only()) { return; }
 
     $nav->add(
         get_string('mymeritcoin', 'local_meritcoin'),
@@ -87,8 +90,9 @@ function local_meritcoin_extend_settings_navigation(settings_navigation $setting
         new pix_icon('i/settings', get_string('manage_rules', 'local_meritcoin'))
     );
 
-    // Tipos de insignia — solo admins/managers globales
-    if (has_capability('local/meritcoin:manage', context_system::instance())) {
+    // Tipos de insignia — admins globales Y profesores con awardbadges
+    $is_global_admin = has_capability('local/meritcoin:manage', context_system::instance());
+    if ($is_global_admin || has_capability('local/meritcoin:awardbadges', $context)) {
         $courseadmin->add(
             get_string('badge_types_menu', 'local_meritcoin'),
             new moodle_url('/local/meritcoin/badge_types.php'),
@@ -150,6 +154,13 @@ function local_meritcoin_extend_navigation_course($nav, $course, $context) {
 function local_meritcoin_get_user_wallet(int $userid): ?string {
     global $DB;
 
+    // Primero buscar wallet custodial (curso piloto).
+    $custodial = $DB->get_field('local_meritcoin_wallets', 'wallet_address', ['userid' => $userid]);
+    if (!empty($custodial)) {
+        return trim($custodial);
+    }
+
+    // Fallback: wallet manual en campo de perfil.
     $fieldshortname = get_config('local_meritcoin', 'wallet_field') ?: 'wallet';
     $field = $DB->get_record('user_info_field', ['shortname' => $fieldshortname]);
 
@@ -172,51 +183,27 @@ function local_meritcoin_get_user_wallet(int $userid): ?string {
 function local_meritcoin_get_user_stats(int $userid): array {
     global $DB;
 
-    $stats = [
-        'total_events'   => 0,
-        'sent_events'    => 0,
-        'pending_events' => 0,
-        'failed_events'  => 0,
-        'completions'    => 0,
-        'grades'         => [],
-        'avg_grade'      => null,
+    $total   = $DB->count_records('local_meritcoin_queue', ['userid' => $userid]);
+    $sent    = $DB->count_records('local_meritcoin_queue', ['userid' => $userid, 'status' => 'sent']);
+    $failed  = $DB->count_records('local_meritcoin_queue', ['userid' => $userid, 'status' => 'failed']);
+    $pending = $DB->count_records_select(
+        'local_meritcoin_queue',
+        "userid = :uid AND status IN ('pending','pending_wallet')",
+        ['uid' => $userid]
+    );
+    $avg = $DB->get_field_sql(
+        "SELECT AVG(grade) FROM {local_meritcoin_queue}
+         WHERE userid = :uid AND event_type = 'grade' AND grade IS NOT NULL",
+        ['uid' => $userid]
+    );
+
+    return [
+        'total_events'   => $total,
+        'sent_events'    => $sent,
+        'pending_events' => $pending,
+        'failed_events'  => $failed,
+        'avg_grade'      => $avg !== null ? round((float)$avg, 1) : null,
     ];
-
-    $events = $DB->get_records('local_meritcoin_queue', ['userid' => $userid]);
-
-    foreach ($events as $event) {
-        $stats['total_events']++;
-
-        switch ($event->status) {
-            case 'sent':
-                $stats['sent_events']++;
-                break;
-            case 'pending':
-            case 'pending_wallet':
-                $stats['pending_events']++;
-                break;
-            case 'failed':
-                $stats['failed_events']++;
-                break;
-        }
-
-        if ($event->event_type === 'completion') {
-            $stats['completions']++;
-        }
-
-        if ($event->event_type === 'grade' && $event->grade !== null) {
-            $stats['grades'][] = (float)$event->grade;
-        }
-    }
-
-    if (!empty($stats['grades'])) {
-        $stats['avg_grade'] = round(
-            array_sum($stats['grades']) / count($stats['grades']),
-            1
-        );
-    }
-
-    return $stats;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -231,41 +218,23 @@ function local_meritcoin_get_backend_student_data(int $userid, ?string $wallet):
         'error'             => null,
     ];
 
-    $enabled    = get_config('local_meritcoin', 'enabled');
-    $backendurl = get_config('local_meritcoin', 'api_url');
-
-    if (!$enabled || empty($backendurl) || empty($wallet)) {
+    if (!get_config('local_meritcoin', 'enabled') || empty($wallet)) {
         $result['error'] = 'no_config';
         return $result;
     }
 
     try {
-        $url     = rtrim($backendurl, '/') . '/students/' . urlencode($wallet) . '/summary';
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 5,
-                'method'  => 'GET',
-            ]
-        ]);
+        $client = new \local_meritcoin\api_client();
+        $data   = $client->get_student_summary($wallet);
 
-        $response = @file_get_contents($url, false, $context);
-        $errno    = ($response === false) ? 1 : 0;
-
-        if ($errno === 0 && !empty($response)) {
-            $data = json_decode($response, true);
-
-            if (is_array($data)) {
-                $result['mrt_balance']       = $data['mrt_balance'] ?? 0;
-                $result['badges']            = $data['badges'] ?? [];
-                $result['backend_available'] = true;
-            } else {
-                $result['error'] = 'invalid_json';
-            }
+        if (is_array($data)) {
+            $result['mrt_balance']       = $data['mrt_balance'] ?? 0;
+            $result['badges']            = $data['badges'] ?? [];
+            $result['backend_available'] = true;
         } else {
-            $result['error'] = 'connection_failed';
+            $result['error'] = 'invalid_response';
         }
-
-    } catch (Exception $e) {
+    } catch (\Exception $e) {
         $result['error'] = $e->getMessage();
         debugging('[local_meritcoin] Backend error: ' . $e->getMessage(), DEBUG_DEVELOPER);
     }
@@ -291,20 +260,7 @@ function local_meritcoin_status_badge(string $status): string {
 }
 
 function local_meritcoin_render_navbar_output(\renderer_base $renderer) {
-    global $USER;
-
-    if (!isloggedin() || isguestuser()) {
-        return '';
-    }
-
-    $courses = enrol_get_users_courses($USER->id, true);
-    foreach ($courses as $course) {
-        $ctx = context_course::instance($course->id);
-        if (has_capability('local/meritcoin:managerewards', $ctx) ||
-            has_capability('local/meritcoin:manage_rules', $ctx)) {
-            return '';
-        }
-    }
+    if (!local_meritcoin_is_student_only()) { return ''; }
 
     $url = new moodle_url('/local/meritcoin/dashboard.php');
 
@@ -319,4 +275,15 @@ function local_meritcoin_render_navbar_output(\renderer_base $renderer) {
                     ' . get_string('mymeritcoin', 'local_meritcoin') . '
                 </span>
             </a>';
+}
+
+function local_meritcoin_user_has_teacher_role(): bool {
+    $courses = enrol_get_users_courses($GLOBALS['USER']->id, true);
+    foreach ($courses as $course) {
+        $ctx = context_course::instance($course->id);
+        if (has_capability('local/meritcoin:awardbadges', $ctx)) {
+            return true;
+        }
+    }
+    return false;
 }
