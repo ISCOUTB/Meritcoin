@@ -153,6 +153,13 @@ function local_meritcoin_extend_navigation_course($nav, $course, $context) {
 function local_meritcoin_get_user_wallet(int $userid): ?string {
     global $DB;
 
+    // Primero buscar wallet custodial (curso piloto).
+    $custodial = $DB->get_field('local_meritcoin_wallets', 'wallet_address', ['userid' => $userid]);
+    if (!empty($custodial)) {
+        return trim($custodial);
+    }
+
+    // Fallback: wallet manual en campo de perfil.
     $fieldshortname = get_config('local_meritcoin', 'wallet_field') ?: 'wallet';
     $field = $DB->get_record('user_info_field', ['shortname' => $fieldshortname]);
 

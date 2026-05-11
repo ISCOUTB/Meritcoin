@@ -64,7 +64,7 @@ async def provision_wallet(
         await db.execute(
             update(WalletRegistry)
             .where(WalletRegistry.student_id == student_id)
-            .values(last_active_at=datetime.now(timezone.utc))
+            .values(last_active_at=datetime.now(timezone.utc).replace(tzinfo=None))
         )
 
     # ── 3. Buscar enrollment existente ────────────────────────────────────────
@@ -120,7 +120,7 @@ async def expire_course(db: AsyncSession, course_id: str) -> dict:
     )
     enrollments = result.scalars().all()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired_count = 0
 
     for enrollment in enrollments:

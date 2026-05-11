@@ -51,7 +51,7 @@ async def reserve_event(db: AsyncSession, event: AcademicEvent) -> bool:
     db.add(record)
 
     try:
-        await db.commit()
+        await db.flush()
         logger.info("Evento %s reservado en BD", event.event_id)
         return True
     except IntegrityError:

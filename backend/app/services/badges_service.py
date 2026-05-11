@@ -419,7 +419,7 @@ async def revoke_award(
         )
 
     award.revoked = True
-    award.revoked_at = datetime.now(timezone.utc)   # datetime.utcnow() deprecado en 3.12+
+    award.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)   # datetime.utcnow() deprecado en 3.12+
     award.revoked_by_id = requester_id
     await db.commit()
     await db.refresh(award)

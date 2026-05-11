@@ -211,7 +211,7 @@ class BlockchainService:
                 "no se pueden emitir insignias"
             )
         to_addr = Web3.to_checksum_address(to)
-        tx_hash = self._send_tx(
+        tx_hash = await self._send_tx(
             self.badges_contract.functions.mintBadge(to_addr, badge_id, uri)
         )
         logger.info("Badge #%d emitido a %s — tx: %s", badge_id, to, tx_hash)
@@ -245,7 +245,7 @@ class BlockchainService:
         to_addr = Web3.to_checksum_address(to)
         # web3.py requiere str para to_wei cuando el valor viene de un float
         amount_wei = Web3.to_wei(str(amount), "ether")
-        tx_hash = self._send_tx(
+        tx_hash = await self._send_tx(
             self.mrt_contract.functions.mint(to_addr, amount_wei)
         )
         logger.info("%.4f MRT acuñados a %s — tx: %s", amount, to, tx_hash)
@@ -273,7 +273,7 @@ class BlockchainService:
             )
         addr = Web3.to_checksum_address(from_addr)
         amount_wei = Web3.to_wei(str(amount), "ether")
-        tx_hash = self._send_tx(
+        tx_hash = await self._send_tx(
             self.mrt_contract.functions.burnFrom(addr, amount_wei)
         )
         logger.info("%.4f MRT quemados de %s — tx: %s", amount, from_addr, tx_hash)

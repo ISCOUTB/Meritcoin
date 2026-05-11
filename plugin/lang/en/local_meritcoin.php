@@ -375,3 +375,9 @@ $string['noenddate']                = 'No end date';
 $string['disabled']                 = 'Disabled';
 $string['confirmdisablepilot']      = 'Are you sure you want to disable this pilot course?';
 $string['task_expire_courses']      = 'Expire MeritCoin pilot course enrollments';
+
+$string['expiresatrequired'] = 'Please select a date before clicking Update.';
+$string['invaliddate'] = 'The date provided is not valid.';$string['settingsenabled'] = 'Enable MeritCoin';
+$string['settingsbackendurl'] = 'Backend URL';
+$string['settingshmacsecret'] = 'HMAC Secret';
+$string['settingswalletfield'] = 'Wallet profile field';

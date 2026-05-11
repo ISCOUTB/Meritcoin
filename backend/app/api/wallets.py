@@ -9,10 +9,10 @@ Rutas:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -29,6 +29,17 @@ class ProvisionRequest(BaseModel):
     student_id: str
     course_id:  str
     expires_at: datetime   # ISO 8601 — tomado de mdl_course.enddate o admin override
+
+    @field_validator('expires_at', mode='before')
+    @classmethod
+    def strip_timezone(cls, v):
+        if isinstance(v, str):
+            # Parsear string ISO y quitar tzinfo
+            dt = datetime.fromisoformat(v.replace('Z', '+00:00'))
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
 
 class ProvisionResponse(BaseModel):
@@ -55,6 +66,17 @@ class ExpireCourseResponse(BaseModel):
 
 class UpdateExpiresAtRequest(BaseModel):
     expires_at: datetime
+
+    @field_validator('expires_at', mode='before')
+    @classmethod
+    def strip_timezone(cls, v):
+        if isinstance(v, str):
+            # Parsear string ISO y quitar tzinfo
+            dt = datetime.fromisoformat(v.replace('Z', '+00:00'))
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ admin_externalpage_setup('local_meritcoin_pilot_courses');
 
 require_capability('local/meritcoin:manage', context_system::instance());
 
-$action   = optional_param('action',   '',  PARAM_ALPHA);
+$action   = optional_param('action',   '',  PARAM_ALPHANUMEXT);
 $courseid = optional_param('courseid', 0,   PARAM_INT);
 $pilotid  = optional_param('pilotid',  0,   PARAM_INT);
 
@@ -30,6 +30,8 @@ $PAGE->set_heading(get_string('pilotcourses', 'local_meritcoin'));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_sesskey();
+    error_log("POST data: " . json_encode($_POST));
+    error_log("POST data: " . json_encode($_POST));
 
     if ($action === 'add' && $courseid > 0) {
         $groupid    = optional_param('groupid',    0,   PARAM_INT);
@@ -53,25 +55,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } else if ($action === 'update_expires' && $pilotid > 0) {
         $expires_at = optional_param('expires_at', '', PARAM_TEXT);
-        $expires_ts = !empty($expires_at) ? strtotime($expires_at) : null;
+        
+        // Validar que se haya ingresado una fecha
+        if (empty($expires_at)) {
+            \core\notification::error(get_string('expiresatrequired', 'local_meritcoin'));
+            redirect($PAGE->url);
+        }
+        
+        $expires_ts = strtotime($expires_at);
+        if ($expires_ts === false || $expires_ts <= 0) {
+            \core\notification::error(get_string('invaliddate', 'local_meritcoin'));
+            redirect($PAGE->url);
+        }
 
         $pilot             = $DB->get_record('local_meritcoin_pilot_courses', ['id' => $pilotid], '*', MUST_EXIST);
         $pilot->expires_at = $expires_ts;
         $DB->update_record('local_meritcoin_pilot_courses', $pilot);
 
-        // Propagar el cambio al backend para todos los enrollments del curso.
-        $client = new \local_meritcoin\api_client();
-        $students = $DB->get_records('local_meritcoin_wallets', ['status' => 'active']);
-        foreach ($students as $stu) {
-            $client->patch("/wallets/enrollments/STU-{$stu->userid}/COURSE-{$pilot->courseid}", [
-                'expires_at' => gmdate('Y-m-d\TH:i:s\Z', $expires_ts),
-            ]);
-        }
         \core\notification::success(get_string('expiresatupdated', 'local_meritcoin'));
-
-    } else if ($action === 'disable' && $pilotid > 0) {
-        $DB->set_field('local_meritcoin_pilot_courses', 'pilot_enabled', 0, ['id' => $pilotid]);
-        \core\notification::success(get_string('pilotdisabled', 'local_meritcoin'));
+        redirect($PAGE->url);
     }
 
     redirect($PAGE->url);

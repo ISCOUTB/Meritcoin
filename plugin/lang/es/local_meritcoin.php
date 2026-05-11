@@ -356,3 +356,9 @@ $string['noenddate']                = 'Sin fecha de fin';
 $string['disabled']                 = 'Desactivado';
 $string['confirmdisablepilot']      = '¿Seguro que quieres desactivar este curso piloto?';
 $string['task_expire_courses']      = 'Expirar inscripciones de cursos piloto MeritCoin';
+
+$string['expiresatrequired'] = 'Por favor selecciona una fecha antes de hacer clic en Update.';
+$string['invaliddate'] = 'La fecha ingresada no es válida.';$string['settingsenabled'] = 'Habilitar MeritCoin';
+$string['settingsbackendurl'] = 'URL del backend';
+$string['settingshmacsecret'] = 'Secreto HMAC';
+$string['settingswalletfield'] = 'Campo de perfil wallet';

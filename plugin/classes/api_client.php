@@ -180,4 +180,32 @@ class api_client {
         $data = json_decode($response, true);
         return is_array($data) ? $data : null;
     }
+
+    public function post(string $endpoint, array $data): ?array {
+        if (empty($this->baseurl)) return null;
+
+        $jsonpayload = json_encode($data);
+        $signature   = hash_hmac('sha256', $jsonpayload, $this->hmacsecret);
+
+        $curl = new \curl();
+        $curl->setHeader([
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'X-HMAC-Signature: ' . $signature,
+        ]);
+
+        $response = $curl->post($this->baseurl . $endpoint, $jsonpayload, [
+            'CURLOPT_TIMEOUT'        => 30,
+            'CURLOPT_CONNECTTIMEOUT' => 10,
+            'CURLOPT_RETURNTRANSFER' => true,
+        ]);
+
+        $info = $curl->get_info();
+        $code = (int)($info['http_code'] ?? 0);
+
+        if ($code >= 200 && $code < 300 || $code === 409) {
+            return json_decode($response, true) ?? [];
+        }
+        return null;
+    }
 }
