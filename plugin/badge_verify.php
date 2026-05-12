@@ -56,6 +56,7 @@ $issuer_name   = s(trim($badge->issuer_firstname  . ' ' . $badge->issuer_lastnam
 $awarded_date  = userdate($badge->timecreated, get_string('strftimedate', 'langconfig'));
 $type_color    = s($badge->type_color  ?? '#f0c040');
 $type_icon     = s($badge->type_icon   ?? 'fa-award');
+$site_name = get_site()->fullname;
 ?>
 
 <div class="container py-5" style="max-width:640px;">
@@ -147,13 +148,35 @@ $type_icon     = s($badge->type_icon   ?? 'fa-award');
 
       </div>
 
+      <!-- Sello de autenticidad -->
+      <div class="d-flex align-items-center justify-content-center gap-2 mt-3 mb-1"
+          style="font-size:0.8rem; color:#555;">
+        <i class="fa fa-university text-warning"></i>
+        <span>
+          Emitido por <strong>MeritCoin – <?= s($site_name ?? 'Plataforma Académica') ?></strong>
+        </span>
+      </div>
+      <div class="text-muted" style="font-size:0.72em;">
+        Registro: <?= userdate($badge->timecreated, '%d %b %Y, %H:%M') ?> UTC
+      </div>
+
       <hr class="my-3">
 
-      <!-- Hash de verificación -->
-      <div class="text-muted" style="font-size:0.72em; word-break:break-all;">
-        <i class="fa fa-fingerprint me-1"></i>
-        <strong><?= get_string('badge_hash', 'local_meritcoin') ?>:</strong>
-        <?= s($badge->verify_hash) ?>
+      <!-- Hash colapsable -->
+      <div class="text-center">
+        <button class="btn btn-sm btn-link text-muted" type="button"
+                id="mrt-toggle-hash"
+                style="font-size:0.78em;">
+          <i class="fa fa-fingerprint me-1"></i>
+          Ver código de verificación
+        </button>
+        <div id="mrt-hash-block"
+            style="display:none; margin-top:.5rem;
+                    background:#f8f9fa; border-radius:6px;
+                    padding:.5rem .75rem; font-size:0.68em;
+                    word-break:break-all; color:#666;">
+          <?= s($badge->verify_hash) ?>
+        </div>
       </div>
 
     </div>
@@ -186,6 +209,19 @@ document.getElementById('mrt-copy-verify-link').addEventListener('click', functi
         }, 2000);
     });
 });
+
+// Toggle hash
+var toggleBtn  = document.getElementById('mrt-toggle-hash');
+var hashBlock  = document.getElementById('mrt-hash-block');
+if (toggleBtn && hashBlock) {
+    toggleBtn.addEventListener('click', function() {
+        var visible = hashBlock.style.display !== 'none';
+        hashBlock.style.display = visible ? 'none' : 'block';
+        toggleBtn.innerHTML = visible
+            ? '<i class="fa fa-fingerprint me-1"></i> Ver código de verificación'
+            : '<i class="fa fa-eye-slash me-1"></i> Ocultar código';
+    });
+}
 </script>
 
 <?php echo $OUTPUT->footer(); ?>);

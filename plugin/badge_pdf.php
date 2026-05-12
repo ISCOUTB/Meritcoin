@@ -174,22 +174,37 @@ header('Content-Type: text/html; charset=utf-8');
 
     /* Firma / emisor */
     .cert-issuer {
-      margin-bottom: 1.5rem;
+        margin: 0 auto 1.5rem;
+        width: 220px;
+        text-align: center;
     }
     .cert-issuer-line {
-      width: 200px;
-      height: 1px;
-      background: #ccc;
-      margin: 0 auto 0.4rem;
+        width: 100%;
+        height: 1px;
+        background: #333;
+        margin: 0 auto 0.4rem;
+        position: relative;
+    }
+    /* Efecto cursiva simulando firma */
+    .cert-issuer-sig {
+        font-family: 'Playfair Display', Georgia, serif;
+        font-size: 1.3rem;
+        color: #1a2540;
+        line-height: 1;
+        margin-bottom: 0.1rem;
+        font-style: italic;
     }
     .cert-issuer-name {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #333;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #333;
+        margin-top: 0.3rem;
     }
     .cert-issuer-label {
-      font-size: 0.72rem;
-      color: #999;
+        font-size: 0.70rem;
+        color: #999;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
     }
 
     /* Footer hash + QR hint */
@@ -287,11 +302,16 @@ header('Content-Type: text/html; charset=utf-8');
 
         <?php if ($issuer_name): ?>
           <div class="cert-issuer">
+            <!-- Nombre en cursiva simula una firma manuscrita -->
+            <div class="cert-issuer-sig"><?= htmlspecialchars($issuer_name) ?></div>
             <div class="cert-issuer-line"></div>
             <div class="cert-issuer-name"><?= htmlspecialchars($issuer_name) ?></div>
-            <div class="cert-issuer-label"><?= htmlspecialchars(get_string('badge_issuer_role', 'local_meritcoin')) ?></div>
+            <div class="cert-issuer-label">
+              <?= htmlspecialchars(get_string('badge_issuer_role', 'local_meritcoin')) ?>
+            </div>
           </div>
         <?php endif; ?>
+
 
       </div>
 
