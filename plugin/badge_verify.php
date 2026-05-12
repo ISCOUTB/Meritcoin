@@ -162,22 +162,20 @@ $site_name = get_site()->fullname;
 
       <hr class="my-3">
 
-      <!-- Hash colapsable — para quien quiera verificar técnicamente -->
+      <!-- Hash colapsable -->
       <div class="text-center">
-        <button class="btn btn-sm btn-link text-muted"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#mrt-hash-block"
+        <button class="btn btn-sm btn-link text-muted" type="button"
+                id="mrt-toggle-hash"
                 style="font-size:0.78em;">
           <i class="fa fa-fingerprint me-1"></i>
           Ver código de verificación
         </button>
-        <div class="collapse" id="mrt-hash-block">
-          <div class="mt-2 px-3 py-2 rounded"
-              style="background:#f8f9fa; font-size:0.68em;
-                      word-break:break-all; color:#666;">
-            <?= s($badge->verify_hash) ?>
-          </div>
+        <div id="mrt-hash-block"
+            style="display:none; margin-top:.5rem;
+                    background:#f8f9fa; border-radius:6px;
+                    padding:.5rem .75rem; font-size:0.68em;
+                    word-break:break-all; color:#666;">
+          <?= s($badge->verify_hash) ?>
         </div>
       </div>
 
@@ -211,6 +209,19 @@ document.getElementById('mrt-copy-verify-link').addEventListener('click', functi
         }, 2000);
     });
 });
+
+// Toggle hash
+var toggleBtn  = document.getElementById('mrt-toggle-hash');
+var hashBlock  = document.getElementById('mrt-hash-block');
+if (toggleBtn && hashBlock) {
+    toggleBtn.addEventListener('click', function() {
+        var visible = hashBlock.style.display !== 'none';
+        hashBlock.style.display = visible ? 'none' : 'block';
+        toggleBtn.innerHTML = visible
+            ? '<i class="fa fa-fingerprint me-1"></i> Ver código de verificación'
+            : '<i class="fa fa-eye-slash me-1"></i> Ocultar código';
+    });
+}
 </script>
 
 <?php echo $OUTPUT->footer(); ?>);
