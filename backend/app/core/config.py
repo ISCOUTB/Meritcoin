@@ -55,5 +55,11 @@ class Settings(BaseSettings):
     # OBLIGATORIO si se usa el sistema de wallets custodiales.
     wallet_encryption_key: str = ""
 
+    # ── IPFS ───────────────────────────────────────────────────────────────
+    ipfs_api_url: str = "http://ipfs:5001"
+    ipfs_gateway_url: str = "http://localhost:8090"
+
+    # ── URL pública del backend ────────────────────────────────────────────
+    public_base_url: str = "http://localhost:8000"
 
 settings = Settings()
