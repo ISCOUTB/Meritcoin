@@ -566,12 +566,12 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 
 ## Estado de las pruebas
 
-| Componente | Tests | Framework | Estado |
-|------------|-------|-----------|--------|
-| Contratos Solidity | 19 | Hardhat + Chai | ✅ Estables |
-| Backend FastAPI | 23 | pytest + httpx | ✅ Estables |
-| E2E flujo completo | 8 | Python (stdlib) | ✅ Estables |
-| **Total** | **50** | | |
+| Componente            | Tests | Framework           | Estado        |
+|-----------------------|-------|---------------------|---------------|
+| Contratos Solidity    | 19    | Hardhat + Chai      | ✅ Estables   |
+| Backend FastAPI       | 24    | pytest + httpx      | ✅ Estables   |
+| E2E flujo completo    | 18     | Python (stdlib)     | ✅ Estables   |
+| **Total**             | **61**|                     |               |
 
 ---
 
@@ -589,7 +589,22 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 | 8 | Dashboard del estudiante + Mercado de recompensas | ✅ Completa |
 | 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | ✅ Completa |
 | 10 | Integración Hyperledger Besu (red privada QBFT, 4 nodos) | ✅ Completa |
-| 11 | Despliegue en SAVIO + ajuste visual al tema de la universidad | 🔄 En progreso |
+| 11 | Finalizacion del MVP + ajuste visual al tema de la universidad | ✅ Completa |
+
+---
+
+## Mejoras futuras y escalamiento en SAVIO
+
+Aunque MeritCoin ya funciona como un MVP desplegado en Docker para entornos de prueba, la visión del proyecto es integrarse de forma nativa con **SAVIO**, la plataforma institucional de la Universidad Tecnológica de Bolívar. Esta integración implicará endurecer la seguridad, mejorar la observabilidad y optimizar el rendimiento para entornos de alta concurrencia.
+
+En una siguiente fase, cuando el piloto se valide y el plugin deje de ser solo un MVP, se contemplan las siguientes líneas de trabajo:
+
+- **Despliegue productivo en SAVIO**: empaquetar el plugin como release estable, seguir el ciclo de QA de la universidad y coordinar la instalación en la instancia oficial de Moodle/SAVIO.
+- **Hardening de seguridad**: rotación de claves, gestión centralizada de secretos, monitoreo de eventos anómalos y revisión periódica de permisos y roles en Moodle y en los contratos.
+- **Escalabilidad de la infraestructura**: separación de ambientes (dev/stage/prod), uso de orquestadores (p.ej. Kubernetes) en lugar de un único docker-compose y afinamiento de recursos para soportar múltiples cursos y semestres concurrentes.
+- **Observabilidad y monitoreo**: paneles de métricas (Prometheus/Grafana o equivalente), logging estructurado y alertas sobre fallos en cola de eventos, backend o red Besu.
+- **Mejoras de UX para estudiantes y profesores**: refinamiento del dashboard MeritCoin, reportes más detallados por curso y soporte a nuevos tipos de reglas y recompensas.
+- **Extensión de la capa on-chain**: posibilidad de interoperar con otras redes EVM de prueba o sidechains institucionales, manteniendo siempre la privacidad de los datos académicos.
 
 ---
 
