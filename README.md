@@ -589,7 +589,7 @@ Las reglas se pueden habilitar o deshabilitar sin borrarlas.
 | 8 | Dashboard del estudiante + Mercado de recompensas | ✅ Completa |
 | 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | ✅ Completa |
 | 10 | Integración Hyperledger Besu (red privada QBFT, 4 nodos) | ✅ Completa |
-| 11 | Finalizacion del MVP + ajuste visual al tema de la universidad | ✅ Completa |
+| 11 | Finalizacion del MVP | ✅ Completa |
 
 ---
 
