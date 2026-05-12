@@ -44,16 +44,16 @@
 
 /* Badges grid ------------------------------------------------------------ */
 .mrt-badges-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 1.25rem;
-    padding: .5rem;
+    padding: .75rem;
 }
 
 .mrt-badge-item {
-    background: #f8f9fa;
-    border: 1.5px solid rgba(0,0,0,0.07);
-    border-radius: 12px;
+    background: #fff;
+    border: 1.5px solid rgba(0,0,0,0.08);
+    border-radius: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.05);
     padding: 1.1rem .75rem .85rem;
     text-align: center;
     transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
@@ -103,6 +103,8 @@
 ═══════════════════════════════════════════════════════════════════════════ */
 
 .mrt-badge-modal-content {
+    background: #fff !important;
+    color: #212529 !important;
     border: none;
     border-radius: 16px;
     overflow: hidden;
@@ -152,11 +154,12 @@
 }
 
 .mrt-badge-modal-body {
+    background: #fff !important;
+    color: #212529 !important;
     padding: 1.5rem 1.75rem;
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
-    background: #fff;
 }
 
 .mrt-modal-section-title {
@@ -164,7 +167,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .08em;
-    color: #6c757d;
+    color: #212529 !important;
     margin-bottom: .6rem;
     display: flex;
     align-items: center;
@@ -213,7 +216,7 @@
 }
 
 .mrt-badge-modal-footer {
-    background: #f8f9fa;
+    background: #f8f9fa !important;
     border-top: 1px solid rgba(0,0,0,.07);
     padding: 1rem 1.75rem;
     display: flex;

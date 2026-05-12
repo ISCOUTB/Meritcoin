@@ -198,9 +198,16 @@ echo $OUTPUT->header();
               <button class="mrt-badge-trigger unstyled-btn w-100" data-badge='<?= s($badge_data) ?>'>
                 <div class="mrt-badge-icon">
                   <?php if (!empty($lb->image_url)): ?>
-                    <img src="<?= s($lb->image_url) ?>" alt="<?= s($lb->badge_name) ?>"
-                         width="64" height="64" loading="lazy"
-                         style="border-radius:8px; object-fit:contain;">
+                      <img src="<?= s($lb->image_url) ?>"
+                          alt="<?= s($lb->badge_name) ?>"
+                          width="52" height="52" loading="lazy"
+                          style="border-radius:8px; object-fit:contain;"
+                          onerror="this.style.display='none';
+                                    this.nextElementSibling.style.display='flex';">
+                      <span class="mrt-modal-icon-fallback"
+                            style="display:none; color:<?= s($lb->type_color ?? '#f0c040') ?>">
+                        <i class="fa <?= s($lb->type_icon ?? 'fa-award') ?>"></i>
+                      </span>
                   <?php else: ?>
                     <i class="fa <?= s($lb->type_icon ?? 'fa-award') ?> fa-3x"
                        style="color:<?= s($lb->type_color ?? '#f0c040') ?>"></i>
@@ -483,6 +490,12 @@ document.querySelectorAll('.mrt-btn-copy-link[data-url]').forEach(function(btn) 
             var img = document.getElementById('mrt-modal-img');
             var ico = document.getElementById('mrt-modal-icon-fallback');
             if (data.image_url) {
+                img.onerror = function() {
+                    img.style.display = 'none';
+                    ico.querySelector('i').className = 'fa ' + (data.type_icon || 'fa-award');
+                    ico.querySelector('i').style.color = data.type_color || '#f0c040';
+                    ico.style.display = 'flex';
+                };
                 img.src = data.image_url;
                 img.alt = data.name || '';
                 img.style.display = 'block';
