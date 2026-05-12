@@ -68,10 +68,7 @@ if ($action === 'award' && $badgeid && $userid && $confirm && confirm_sesskey())
 
       // ── Llamada al backend ────────────────────────────────────────
       $api_url = get_config('local_meritcoin', 'api_url') ?: 'http://172.19.0.6:8000';
-      $wallet  = $DB->get_field('user_info_data', 'data', [
-          'userid'  => $userid,
-          'fieldid' => $DB->get_field('user_info_field', 'id', ['shortname' => 'wallet']),
-      ]) ?: null;
+      $wallet = local_meritcoin_get_user_wallet($userid);
 
       $payload = json_encode([
           'template_id'    => $badge_type->backend_id,

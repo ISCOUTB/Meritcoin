@@ -1,8 +1,5 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
-//
-// @package local_meritcoin
-// @copyright 2026 Universidad Tecnológica de Bolívar
 // @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 
 defined('MOODLE_INTERNAL') || die();
@@ -114,6 +111,7 @@ $string['no_wallet']        = 'El estudiante no tiene wallet en el campo \'{$a}\
 $string['invalidwallet']    = 'Formato de wallet Ethereum inválido para el usuario {$a}.';
 $string['gradebelowmin']    = 'La calificación {$a} está por debajo del mínimo requerido para ganar monedas.';
 $string['invaliddate']      = 'La fecha ingresada no es válida.';
+$string['usernotenrolled']  = 'El usuario seleccionado no está matriculado en este curso.';
 
 // ── Manage rules page ─────────────────────────────────────────────────────────
 $string['manage_rules']          = 'MeritCoin – Reglas de monedas';
@@ -279,6 +277,7 @@ $string['badge_hash']                 = 'Hash de verificación';
 $string['verifybadge']                = 'Verificar insignia';
 $string['verify']                     = 'Verificar';
 $string['balancelocal']               = 'estimado local';
+$string['verifications']              = 'Verificaciones';
 
 // ── Certificado PDF (badge_pdf.php) ───────────────────────────────────────────
 $string['badge_pdf_certificate_label'] = 'Certificado de Insignia';
@@ -350,6 +349,7 @@ $string['badge_no_types_warning']     = 'No hay tipos de insignia configurados. 
 $string['badge_col_badge']            = 'Insignia';
 $string['badge_col_student']          = 'Estudiante';
 $string['badge_col_verify']           = 'Verificar';
+
 
 // ── Administración de tipos de insignia (badge_types.php) ─────────────────────
 $string['badge_types_menu']            = 'MeritCoin – Tipos de insignia';
