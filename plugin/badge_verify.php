@@ -56,6 +56,7 @@ $issuer_name   = s(trim($badge->issuer_firstname  . ' ' . $badge->issuer_lastnam
 $awarded_date  = userdate($badge->timecreated, get_string('strftimedate', 'langconfig'));
 $type_color    = s($badge->type_color  ?? '#f0c040');
 $type_icon     = s($badge->type_icon   ?? 'fa-award');
+$site_name = get_site()->fullname;
 ?>
 
 <div class="container py-5" style="max-width:640px;">
@@ -147,13 +148,37 @@ $type_icon     = s($badge->type_icon   ?? 'fa-award');
 
       </div>
 
+      <!-- Sello de autenticidad -->
+      <div class="d-flex align-items-center justify-content-center gap-2 mt-3 mb-1"
+          style="font-size:0.8rem; color:#555;">
+        <i class="fa fa-university text-warning"></i>
+        <span>
+          Emitido por <strong>MeritCoin – <?= s($site_name ?? 'Plataforma Académica') ?></strong>
+        </span>
+      </div>
+      <div class="text-muted" style="font-size:0.72em;">
+        Registro: <?= userdate($badge->timecreated, '%d %b %Y, %H:%M') ?> UTC
+      </div>
+
       <hr class="my-3">
 
-      <!-- Hash de verificación -->
-      <div class="text-muted" style="font-size:0.72em; word-break:break-all;">
-        <i class="fa fa-fingerprint me-1"></i>
-        <strong><?= get_string('badge_hash', 'local_meritcoin') ?>:</strong>
-        <?= s($badge->verify_hash) ?>
+      <!-- Hash colapsable — para quien quiera verificar técnicamente -->
+      <div class="text-center">
+        <button class="btn btn-sm btn-link text-muted"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#mrt-hash-block"
+                style="font-size:0.78em;">
+          <i class="fa fa-fingerprint me-1"></i>
+          Ver código de verificación
+        </button>
+        <div class="collapse" id="mrt-hash-block">
+          <div class="mt-2 px-3 py-2 rounded"
+              style="background:#f8f9fa; font-size:0.68em;
+                      word-break:break-all; color:#666;">
+            <?= s($badge->verify_hash) ?>
+          </div>
+        </div>
       </div>
 
     </div>
