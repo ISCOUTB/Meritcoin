@@ -106,6 +106,80 @@ $site_name = get_site()->fullname;
         <strong><?= $student_name ?></strong>
       </p>
 
+      <!-- ── Verificaciones externas ─────────────────────────── -->
+      <?php
+      $api_url = get_config('local_meritcoin', 'api_url') ?: 'http://localhost:8000';
+      $verify_data = null;
+      if (!empty($badge->award_id)) {
+          $ch = curl_init("{$api_url}/verify/{$badge->award_id}");
+          curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
+          $resp = curl_exec($ch);
+          curl_close($ch);
+          if ($resp) $verify_data = json_decode($resp);
+      }
+      ?>
+      <hr class="my-3">
+      <div class="text-start">
+        <div class="mrt-meta-label text-muted small mb-2 text-center">
+          <i class="fa fa-shield-alt me-1"></i><?= get_string('verifications', 'local_meritcoin') ?>
+        </div>
+        <ul class="list-group list-group-flush">
+
+          <!-- BD MeritCoin -->
+          <li class="list-group-item d-flex align-items-center gap-2 px-0">
+            <i class="fa fa-database text-success"></i>
+            <div>
+              <div class="fw-semibold small">Base de datos MeritCoin</div>
+              <div class="text-muted" style="font-size:0.72em; word-break:break-all;">
+                ID: <?= s($badge->award_id ?? $badge->verify_hash) ?>
+              </div>
+            </div>
+            <span class="badge bg-success ms-auto">Verificado</span>
+          </li>
+
+          <!-- IPFS -->
+          <li class="list-group-item d-flex align-items-center gap-2 px-0">
+            <i class="fa fa-cube text-primary"></i>
+            <div>
+              <div class="fw-semibold small">IPFS (metadatos inmutables)</div>
+              <?php if (!empty($verify_data->ipfs_cid)): ?>
+                <div class="text-muted" style="font-size:0.72em; word-break:break-all;">
+                  CID: <?= s($verify_data->ipfs_cid) ?>
+                </div>
+                <a href="<?= s($verify_data->ipfs_url) ?>" target="_blank"
+                   style="font-size:0.72em;">Ver metadatos →</a>
+              <?php else: ?>
+                <div class="text-muted" style="font-size:0.72em;">No disponible</div>
+              <?php endif; ?>
+            </div>
+            <span class="badge <?= !empty($verify_data->ipfs_cid) ? 'bg-success' : 'bg-secondary' ?> ms-auto">
+              <?= !empty($verify_data->ipfs_cid) ? 'Verificado' : 'N/A' ?>
+            </span>
+          </li>
+
+          <!-- Blockchain -->
+          <li class="list-group-item d-flex align-items-center gap-2 px-0">
+            <i class="fa fa-link text-warning"></i>
+            <div>
+              <div class="fw-semibold small">Blockchain (Besu)</div>
+              <?php if (!empty($verify_data->tx_hash)): ?>
+                <div class="text-muted" style="font-size:0.72em; word-break:break-all;">
+                  TX: <?= s($verify_data->tx_hash) ?>
+                </div>
+              <?php else: ?>
+                <div class="text-muted" style="font-size:0.72em;">
+                  <?= s($verify_data->chain_status ?? 'Sin wallet registrado') ?>
+                </div>
+              <?php endif; ?>
+            </div>
+            <span class="badge <?= !empty($verify_data->tx_hash) ? 'bg-success' : 'bg-warning text-dark' ?> ms-auto">
+              <?= !empty($verify_data->tx_hash) ? 'Confirmado' : 'Pendiente' ?>
+            </span>
+          </li>
+
+        </ul>
+      </div>  
+
       <hr class="my-3">
 
       <!-- Metadatos en grid -->

@@ -159,6 +159,7 @@ if ($data = $form->get_data()) {
         $record->coins_threshold = 0;  // Reservado para futuras reglas
         $record->timecreated   = $now;
         $record->timemodified  = $now;
+        $record->award_id    = $api_response->id ?? null; 
 
         $DB->insert_record('local_meritcoin_badges', $record);
         $count++;
