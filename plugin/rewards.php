@@ -152,7 +152,7 @@ echo $OUTPUT->header();
                   <?= get_string('rewardprice', 'local_meritcoin') ?> <span class="text-danger">*</span>
               </label>
               <input type="number" id="mrt-price" name="price_mrt" class="form-control"
-                     min="1" step="1" placeholder="50"
+                     min="1" step="1" placeholder="1"
                      style="width:70px; font-size:0.95rem; font-weight:500;"
                      oninput="this.value = Math.abs(Math.round(this.value)) || ''"
                      required>
