@@ -305,6 +305,15 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
       3. Si la plantilla tiene mrt_reward, acuñar MRT (no bloquea el badge).
       4. Guardar el BadgeAward en BD.
     """
+
+    cid: Optional[str] = None
+    try:
+        cid = await upload_json_to_ipfs(badge_metadata)
+        badge_uri = await get_ipfs_gateway_url(cid)
+    except Exception as exc:
+        logger.warning("IPFS no disponible, usando URI fallback: %s", exc)
+        badge_uri = f"{settings.public_base_url}/badges/{data.template_id}"
+
     template = await get_template(db, data.template_id)
     if not template.is_active:
         raise HTTPException(
@@ -377,6 +386,7 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
         course_id=data.course_id,
         tx_hash=tx_hash,
         chain_status=chain_status,
+        ipfs_cid=cid,
     )
     db.add(award)
     await db.commit()
@@ -478,6 +488,8 @@ async def get_public_verification(db: AsyncSession, award_id: str) -> PublicVeri
         issued_at=award.issued_at,
         chain_status=award.chain_status,
         tx_hash=award.tx_hash,
+        ipfs_cid=award.ipfs_cid,
+        ipfs_url=f"{settings.ipfs_gateway_url}/ipfs/{award.ipfs_cid}" if award.ipfs_cid else None,
         revoked=award.revoked,
         revoked_at=award.revoked_at,
     )
