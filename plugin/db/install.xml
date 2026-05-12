@@ -342,6 +342,8 @@
                COMMENT="userid del profesor que otorgó la insignia"/>
         <FIELD NAME="verify_hash"     TYPE="char"   LENGTH="64"  NOTNULL="true"
                COMMENT="SHA-256 único para verificación pública"/>
+        <FIELD NAME="award_id" TYPE="char" LENGTH="36" NOTNULL="false" DEFAULT="" SEQUENCE="false" 
+               COMMENT="UUID del award en el backend MeritCoin"/>
         <FIELD NAME="coins_threshold" TYPE="number" LENGTH="10"  DECIMALS="2" NOTNULL="true" DEFAULT="0"
                COMMENT="Reservado: umbral de coins asociado al otorgamiento (uso futuro)"/>
         <FIELD NAME="notes"           TYPE="text"   NOTNULL="false"
