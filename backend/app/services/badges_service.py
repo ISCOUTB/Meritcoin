@@ -493,3 +493,61 @@ async def get_public_verification(db: AsyncSession, award_id: str) -> PublicVeri
         revoked=award.revoked,
         revoked_at=award.revoked_at,
     )
+
+async def retry_chain(db: AsyncSession, award_id: str) -> BadgeAward:
+    """
+    Reintenta el mint en blockchain de un award que quedó con
+    chain_status 'skipped' o 'failed'.
+    """
+    # 1. Buscar el award
+    result = await db.execute(
+        select(BadgeAward)
+        .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))
+        .where(BadgeAward.id == award_id)
+    )
+    award = result.scalar_one_or_none()
+    if not award:
+        raise HTTPException(status_code=404, detail="Insignia no encontrada.")
+    if award.revoked:
+        raise HTTPException(status_code=400, detail="No se puede reintentar el mint de una insignia revocada.")
+    if award.chain_status == "confirmed":
+        raise HTTPException(status_code=409, detail="La insignia ya fue confirmada en blockchain.")
+    if not award.student_wallet:
+        raise HTTPException(status_code=422, detail="El award no tiene wallet — no es posible mintear.")
+    if not blockchain.is_connected():
+        raise HTTPException(status_code=503, detail="Nodo blockchain no disponible. Intenta más tarde.")
+
+    # 2. Reconstruir badge_id y URI (reutiliza CID existente si hay)
+    badge_id = int(award.template.id.replace("-", ""), 16) % (2 ** 256)
+    badge_uri = (
+        await get_ipfs_gateway_url(award.ipfs_cid)
+        if award.ipfs_cid
+        else f"{settings.public_base_url}/badges/{award.template.id}"
+    )
+
+    # 3. Mint badge
+    try:
+        tx_hash = await blockchain.mint_badge(award.student_wallet, badge_id, badge_uri)
+        award.tx_hash = tx_hash
+        award.chain_status = "confirmed"
+    except Exception as exc:
+        award.chain_status = "failed"
+        await db.commit()
+        raise HTTPException(status_code=502, detail=f"Error al mintear: {exc}")
+
+    # 4. Mint MRT opcional (no bloquea)
+    mrt_reward = getattr(award.template, "mrt_reward", None)
+    if mrt_reward and float(mrt_reward) > 0:
+        try:
+            await blockchain.mint_mrt(award.student_wallet, float(mrt_reward))
+        except Exception as exc:
+            logger.warning("Error MRT en retry (no crítico): %s", exc)
+
+    await db.commit()
+    # Refrescar con relaciones
+    result = await db.execute(
+        select(BadgeAward)
+        .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))
+        .where(BadgeAward.id == award.id)
+    )
+    return result.scalar_one()
