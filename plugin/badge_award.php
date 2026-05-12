@@ -36,13 +36,6 @@ if ($action === 'award' && $badgeid && $userid && $confirm && confirm_sesskey())
         MUST_EXIST
     );
 
-    // EXTRA: si el tipo es de sistema y el profesor no tiene la capability especial, lo bloqueamos
-    $syscontext = context_system::instance();
-    $typesconditions = ['enabled' => 1];
-    if (!has_capability('moodle/site:config', $syscontext)) {
-        $typesconditions['is_system'] = 0;
-    }
-
     $student = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
 
     // Verificar que el estudiante está en el curso
