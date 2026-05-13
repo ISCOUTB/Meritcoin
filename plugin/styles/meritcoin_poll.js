@@ -54,7 +54,22 @@
         });
     }
 
-    // Iniciar polling para la página indicada
+    function pollWithQuery(query) {
+        fetch(BASE_URL + query, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            var page = new URLSearchParams(query).get('page');
+            var handler = handlers[page];
+            if (handler && !data.error) handler(data);
+        })
+        .catch(function (err) {
+            console.warn('[MeritCoin] poll error:', err);
+        });
+    }
+
     window.MeritCoinPoll = {
         start: function (page, interval, params) {
             var ms = interval || POLL_INTERVAL;
@@ -64,7 +79,6 @@
                     query += '&' + k + '=' + params[k];
                 });
             }
-            // guardar query para el intervalo
             var run = function() { pollWithQuery(query); };
             run();
             setInterval(run, ms);
