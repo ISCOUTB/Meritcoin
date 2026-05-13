@@ -131,6 +131,9 @@ $redeemed_ids = $DB->get_fieldset_select(
 );
 $redeemed_ids = array_flip($redeemed_ids); // para isset() rápido
 
+$PAGE->requires->js(new moodle_url('/local/meritcoin/styles/meritcoin_poll.js'));
+$PAGE->requires->js_init_code("MeritCoinPoll.start('marketplace', 20000, {courseid: $courseid});");
+
 echo $OUTPUT->header();
 ?>
 
@@ -150,8 +153,8 @@ echo $OUTPUT->header();
       <div>
         <div class="mrt-balance-label"><?= get_string('marketplaceavailable', 'local_meritcoin') ?></div>
         <div class="mrt-balance-value">
-          <?= number_format($available, 2) ?>
-          <span class="mrt-ticker"><?= s($coin_symbol) ?></span>
+          <span id="mrt-marketplace-balance"><?= number_format($available, 2) ?></span>
+          <span class="mrt-ticker" id="mrt-marketplace-ticker"><?= s($coin_symbol) ?></span>
         </div>
       </div>
     </div>

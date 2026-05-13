@@ -87,6 +87,9 @@ $local_badges = $DB->get_records_sql(
     ['userid' => $USER->id]
 );
 
+$PAGE->requires->js(new moodle_url('/local/meritcoin/styles/meritcoin_poll.js'));
+$PAGE->requires->js_init_code("MeritCoinPoll.start('dashboard', 20000);");
+
 echo $OUTPUT->header();
 ?>
 
