@@ -119,6 +119,15 @@ class send_events_task extends \core\task\scheduled_task {
                 $record->last_error = null;
                 $DB->update_record('local_meritcoin_queue', $record);
 
+                // ── NUEVO: guardar mrt_amount que devuelve el backend ──────────
+                $decoded = json_decode($result->body, true);
+                $mrt = isset($decoded['mrt_amount']) ? (float)$decoded['mrt_amount'] : 0.0;
+                if ($mrt > 0) {
+                    $DB->set_field('local_meritcoin_queue', 'coins_amount',
+                        $mrt, ['id' => $record->id]);
+                    $record->coins_amount = $mrt;
+                }
+
                 // ── Registrar ganancia local por curso ──────────────────
                 // Este paso alimenta el saldo gastable del mercado por curso.
                 $this->record_course_earning($record);
