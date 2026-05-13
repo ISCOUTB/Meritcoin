@@ -67,7 +67,7 @@ async def get_student_badges(
 
     return [
         StudentBadge(
-            badge_id=int(audit.badge_id) if audit.badge_id else 0,
+            badge_id=audit.badge_id or "",
             course_id=event.course_id,
             course_name=event.course_name,
             event_type=event.event_type,
