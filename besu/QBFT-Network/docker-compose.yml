@@ -17,11 +17,14 @@ services:
     volumes:
       - ./genesis.json:/var/lib/besu/genesis.json
       - ./Node-1/data:/var/lib/besu/data
+      - /etc/localtime:/etc/localtime:ro
     ports:
       - "8545:8545"
       - "30303:30303"
     networks:
       - besu-network
+    environment:
+      - TZ=UTC
 
   besu-node-2:
     image: hyperledger/besu:latest
@@ -44,6 +47,7 @@ services:
     volumes:
       - ./genesis.json:/var/lib/besu/genesis.json
       - ./Node-2/data:/var/lib/besu/data
+      - /etc/localtime:/etc/localtime:ro
     ports:
       - "8546:8545"
       - "30304:30303"
@@ -51,6 +55,9 @@ services:
       - besu-node-1
     networks:
       - besu-network
+    environment:
+      - TZ=UTC
+      
 
   besu-node-3:
     image: hyperledger/besu:latest
@@ -73,6 +80,7 @@ services:
     volumes:
       - ./genesis.json:/var/lib/besu/genesis.json
       - ./Node-3/data:/var/lib/besu/data
+      - /etc/localtime:/etc/localtime:ro
     ports:
       - "8547:8545"
       - "30305:30303"
@@ -80,6 +88,8 @@ services:
       - besu-node-1
     networks:
       - besu-network
+    environment:
+      - TZ=UTC
 
   besu-node-4:
     image: hyperledger/besu:latest
@@ -102,11 +112,30 @@ services:
     volumes:
       - ./genesis.json:/var/lib/besu/genesis.json
       - ./Node-4/data:/var/lib/besu/data
+      - /etc/localtime:/etc/localtime:ro
     ports:
       - "8548:8545"
       - "30306:30303"
     depends_on:
       - besu-node-1
+    networks:
+      - besu-network
+    environment:
+      - TZ=UTC
+
+  besu-watchdog:
+    image: alpine:latest   # 👈 cambia docker:cli por alpine
+    container_name: besu-watchdog
+    restart: always
+    depends_on:
+      - besu-node-1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./watchdog.sh:/watchdog.sh
+    entrypoint: ["/bin/sh", "-c", "apk add --no-cache curl docker-cli -q && sh /watchdog.sh"]
+    environment:
+      - TZ=UTC
+      - RPC=http://besu-node-1:8545
     networks:
       - besu-network
 

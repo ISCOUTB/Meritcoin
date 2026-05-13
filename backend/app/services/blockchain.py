@@ -101,6 +101,8 @@ _TX_TIMEOUT = 120
 
 # Gas máximo por transacción (fallback si estimate_gas falla).
 _GAS_FALLBACK = 500_000
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 2 
 
 
 class BlockchainService:
@@ -170,26 +172,41 @@ class BlockchainService:
     async def _send_tx(self, tx_func) -> str:
         self._require_account()
 
-        async with self._tx_lock:
-            try:
-                gas = tx_func.estimate_gas({"from": self._account.address})
-                gas = int(gas * 1.2)
-            except Exception as exc:
-                logger.warning("estimate_gas falló (%s), usando fallback %d", exc, _GAS_FALLBACK)
-                gas = _GAS_FALLBACK
+        async with self._tx_lock:         
+            last_exc: Exception | None = None
 
-            tx = tx_func.build_transaction({
-                "from": self._account.address,
-                "nonce": self.w3.eth.get_transaction_count(self._account.address),
-                "gas": gas,
-                "gasPrice": self.w3.eth.gas_price,
-            })
+            for attempt in range(1, _MAX_RETRIES + 1):
+                try:
+                    try:
+                        gas = tx_func.estimate_gas({"from": self._account.address})
+                        gas = int(gas * 1.2)
+                    except Exception as exc:
+                        logger.warning("estimate_gas falló (%s), usando fallback %d", exc, _GAS_FALLBACK)
+                        gas = _GAS_FALLBACK
 
-            signed = self._account.sign_transaction(tx)
-            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=_TX_TIMEOUT)
+                    tx = tx_func.build_transaction({
+                        "from": self._account.address,
+                        "nonce": self.w3.eth.get_transaction_count(self._account.address),
+                        "gas": gas,
+                        "gasPrice": self.w3.eth.gas_price,
+                    })
 
-            return receipt.transactionHash.hex()
+                    signed = self._account.sign_transaction(tx)
+                    tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=_TX_TIMEOUT)
+                    return receipt.transactionHash.hex()
+
+                except Exception as exc:
+                    last_exc = exc
+                    if attempt < _MAX_RETRIES:
+                        delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                        logger.warning("Intento %d/%d falló (%s) — reintentando en %ds",
+                                    attempt, _MAX_RETRIES, exc, delay)
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.error("Todos los intentos fallaron: %s", exc)
+
+        raise RuntimeError(f"Transacción falló tras {_MAX_RETRIES} intentos: {last_exc}")
 
     # ── Badges (ERC-1155) ─────────────────────────────────────────────────────
 

@@ -30,9 +30,28 @@ async def reserve_event(db: AsyncSession, event: AcademicEvent) -> bool:
     """
     Inserta el event_id en BD antes de ejecutar side effects externos.
 
-    Retorna True si se reservó correctamente.
-    Retorna False si el event_id ya existe (evento duplicado).
+    Retorna True si se reservó correctamente (nuevo o reintento de failed).
+    Retorna False si el event_id ya existe con status "processed" (duplicado real).
     """
+    # ── Verificar si ya existe ────────────────────────────────────────────────
+    result = await db.execute(
+        select(EventRecord).where(EventRecord.event_id == event.event_id)
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        if existing.status == "processed":
+            logger.warning("Evento duplicado detectado (ya procesado): %s", event.event_id)
+            return False
+        elif existing.status in ("failed", "processing"):
+            # Permitir reintento — resetear a processing
+            existing.status = "processing"
+            existing.last_error = None
+            await db.flush()
+            logger.info("Evento %s en estado '%s' — permitiendo reintento", event.event_id, existing.status)
+            return True
+
+    # ── Nuevo evento ──────────────────────────────────────────────────────────
     record = EventRecord(
         event_id=event.event_id,
         student_wallet=event.student_wallet,

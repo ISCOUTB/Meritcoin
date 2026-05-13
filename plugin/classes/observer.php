@@ -32,6 +32,8 @@ defined('MOODLE_INTERNAL') || die();
  * Si la regla tiene min_grade, valida la nota antes de encolar.
  * La idempotencia es estricta: si ya se encoló un evento para
  * userid+courseid+cmid+type, no se vuelve a encolar aunque la nota cambie.
+ * Excepción: si el evento anterior falló, se resetea a pending con el
+ * payload actualizado para permitir reintento.
  *
  * @package    local_meritcoin
  * @copyright  2026 Universidad Tecnológica de Bolívar
@@ -69,7 +71,7 @@ class observer {
 
         // Resolver cmid y mod_type para actividades reales.
         if (!empty($gradeitem->itemmodule) && !empty($gradeitem->iteminstance)) {
-            $modtype  = $gradeitem->itemmodule; // e.g. 'assign', 'forum', 'quiz'
+            $modtype  = $gradeitem->itemmodule;
             $moduleid = $DB->get_field('modules', 'id', ['name' => $gradeitem->itemmodule]);
 
             if ($moduleid) {
@@ -164,7 +166,10 @@ class observer {
         if ($limit > 0) {
             $sql = "SELECT COALESCE(SUM(coins_amount), 0)
                       FROM {local_meritcoin_queue}
-                     WHERE userid = :uid AND courseid = :cid AND event_type = 'grade'";
+                     WHERE userid    = :uid
+                       AND courseid  = :cid
+                       AND event_type = 'grade'
+                       AND status NOT IN ('failed', 'processing')";
             $already = (float)$DB->get_field_sql($sql, ['uid' => $userid, 'cid' => $courseid]);
             if ($already + $coins > $limit) {
                 debugging("MeritCoin: Student {$userid} reached MRT limit ({$already}/{$limit}) in course {$courseid}.", DEBUG_DEVELOPER);
@@ -182,14 +187,14 @@ class observer {
             $activityname = $coursename;
         }
 
-        // ── 7. Generar event_id único (idempotencia estricta por actividad) ───
-        // Un mismo userid+courseid+cmid+type siempre produce el mismo event_id.
-        // Si la nota cambia pero ya se ganó MRT antes, no se genera otro evento.
-        $now    = time();
-        $cmpart = $cmid ?? 'course';
+        // ── 7. Generar event_id único ────────────────────────────────────────
+        $now     = time();
+        $cmpart  = $cmid ?? 'course';
         $eventid = 'evt-' . md5("moodle-{$userid}-{$courseid}-{$cmpart}-{$type}");
 
-        if ($DB->record_exists('local_meritcoin_queue', ['event_id' => $eventid])) {
+        // Chequear duplicado antes de construir el payload completo.
+        $existing = $DB->get_record('local_meritcoin_queue', ['event_id' => $eventid], 'id, status');
+        if ($existing && $existing->status !== 'failed') {
             return;
         }
 
@@ -210,23 +215,36 @@ class observer {
             'timestamp'      => gmdate('Y-m-d\TH:i:s\Z', $now),
         ];
 
-        // ── 9. Insertar en la cola ───────────────────────────────────────────
-        $record                = new \stdClass();
-        $record->event_id      = $eventid;
-        $record->userid        = $userid;
-        $record->courseid      = $courseid;
-        $record->cmid          = $cmid;
-        $record->activity_name = $activityname;
-        $record->event_type    = $type;
-        $record->grade         = $grade;
-        $record->coins_amount  = $coins;
+        // ── 9. Reset si el evento anterior falló ─────────────────────────────
+        if ($existing && $existing->status === 'failed') {
+            $DB->set_field('local_meritcoin_queue', 'status',        'pending',                                    ['id' => $existing->id]);
+            $DB->set_field('local_meritcoin_queue', 'attempts',      0,                                            ['id' => $existing->id]);
+            $DB->set_field('local_meritcoin_queue', 'last_error',    null,                                         ['id' => $existing->id]);
+            $DB->set_field('local_meritcoin_queue', 'grade',         $grade,                                       ['id' => $existing->id]);
+            $DB->set_field('local_meritcoin_queue', 'coins_amount',  $coins,                                       ['id' => $existing->id]);
+            $DB->set_field('local_meritcoin_queue', 'student_wallet',$wallet,                                      ['id' => $existing->id]);
+            $DB->set_field('local_meritcoin_queue', 'payload',       json_encode($payload, JSON_UNESCAPED_UNICODE), ['id' => $existing->id]);
+            $DB->set_field('local_meritcoin_queue', 'timemodified',  $now,                                         ['id' => $existing->id]);
+            return;
+        }
+
+        // ── 10. Insertar nuevo registro en la cola ───────────────────────────
+        $record                 = new \stdClass();
+        $record->event_id       = $eventid;
+        $record->userid         = $userid;
+        $record->courseid       = $courseid;
+        $record->cmid           = $cmid;
+        $record->activity_name  = $activityname;
+        $record->event_type     = $type;
+        $record->grade          = $grade;
+        $record->coins_amount   = $coins;
         $record->student_wallet = $wallet;
-        $record->payload       = json_encode($payload, JSON_UNESCAPED_UNICODE);
-        $record->status        = $status;
-        $record->attempts      = 0;
-        $record->last_error    = null;
-        $record->timecreated   = $now;
-        $record->timemodified  = $now;
+        $record->payload        = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        $record->status         = $status;
+        $record->attempts       = 0;
+        $record->last_error     = null;
+        $record->timecreated    = $now;
+        $record->timemodified   = $now;
 
         $DB->insert_record('local_meritcoin_queue', $record);
     }

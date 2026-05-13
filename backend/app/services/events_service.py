@@ -91,15 +91,14 @@ async def process_event(db: AsyncSession, event: AcademicEvent) -> EventResponse
 
     except Exception as exc:
         await db.rollback()
-        # mark_event_failed abre su propia sesión/commit para no depender
-        # del estado actual (posiblemente inválido) de la sesión rollbackeada
         await audit_service.mark_event_failed(event.event_id, str(exc))
-        logger.error(
-            "Error procesando evento %s: %s",
-            event.event_id, exc,
-            exc_info=True,
+        logger.error("Error procesando evento %s: %s", event.event_id, exc, exc_info=True)
+        # NO hacer raise — retornar status "queued" en vez de propagar error
+        return EventResponse(
+            event_id=event.event_id,
+            status="queued",
+            message="Blockchain no disponible — mint encolado para reintento automático",
         )
-        raise
 
     # ── 5. Construir respuesta ────────────────────────────────────────────────
     coin_symbol = event.coin_symbol or "MRT"
