@@ -162,7 +162,8 @@ class observer {
         }
 
         // ── 4. Verificar límite total de MRT por estudiante por curso ────────
-        $limit = (int)(get_config('local_meritcoin', 'student_course_limit') ?: 0);
+        $courseconfig = $DB->get_record('local_meritcoin_course_config', ['courseid' => $courseid]);
+        $limit = (int)($courseconfig->student_course_limit ?? get_config('local_meritcoin', 'student_course_limit') ?: 0);
         if ($limit > 0) {
             $sql = "SELECT COALESCE(SUM(coins_amount), 0)
                       FROM {local_meritcoin_queue}

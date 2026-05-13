@@ -283,7 +283,7 @@ echo $OUTPUT->header();
                       title="<?= s($activitylabel) ?>">
                     <?= s($activitylabel) ?>
                   </td>
-                  <td class="text-end fw-bold text-success">+<?= number_format((float)$e->coins_amount, 2) ?></td>
+                  <td class="text-end fw-bold text-success">+<?= number_format((float)$event->coins_amount, 2) ?></td>
                   <td><?= local_meritcoin_status_badge($event->status) ?></td>
                   <td class="text-nowrap">
                     <?= userdate($event->timecreated, get_string('strftimedatetimeshort', 'langconfig')) ?>
