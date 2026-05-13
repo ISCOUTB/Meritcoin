@@ -126,6 +126,7 @@ services:
       start_period: 10s
     networks:
       - meritcoin-net
+      - besu-network
 
   # ── IPFS (para almacenamiento descentralizado) ─────────────────────────
   ipfs:
@@ -159,3 +160,6 @@ volumes:
 networks:
   meritcoin-net:
     driver: bridge
+  besu-network:         
+    external: true
+    name: qbft-network_besu-network
