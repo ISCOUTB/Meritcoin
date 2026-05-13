@@ -1,4 +1,15 @@
+require("dotenv").config();
 require("@nomicfoundation/hardhat-toolbox");
+
+// Falla explícitamente si faltan las claves — nunca usar fallbacks hardcodeados
+function requireEnv(name) {
+  const val = process.env[name];
+  if (!val) throw new Error(`❌ Variable de entorno faltante: ${name}. Defínela en contracts/.env`);
+  return val;
+}
+
+// En tareas que no necesitan cuentas (compile, test con hardhat network) no forzamos las claves
+const isDeployTask = process.argv.some(a => ["run", "deploy", "ignition"].includes(a));
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -17,17 +28,17 @@ module.exports = {
       url: "http://127.0.0.1:8545",
     },
     besu: {
-      url: "http://localhost:8545",
+      url: process.env.BESU_RPC_URL || "http://localhost:8545",
       chainId: 1337,
-      accounts: [
-        process.env.BESU_PRIVATE_KEY_1 || "0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63",
-        process.env.BESU_PRIVATE_KEY_2 || "0xc87509a1c067bbde78beb793e6fa76530b6382a4c0241e5e4a9ec0a0f44dc0d3",
-        process.env.BESU_PRIVATE_KEY_3 || "0xae6ae8e5ccbfb04590405997ee2d52d2b330726137b875053c36d94e974d162f",
-        process.env.BESU_PRIVATE_KEY_4 || "0x0dbbe8e4ae425a6d2687f1a7e3ba17bc98c673636790f1b8ad91193c05875ef1",
-      ],
-      gas: 8000000,           
-      gasPrice: 0,            
-      timeout: 60000,         
+      accounts: isDeployTask ? [
+        requireEnv("BESU_PRIVATE_KEY_1"),
+        requireEnv("BESU_PRIVATE_KEY_2"),
+        requireEnv("BESU_PRIVATE_KEY_3"),
+        requireEnv("BESU_PRIVATE_KEY_4"),
+      ] : [],
+      gas: 8000000,
+      gasPrice: 0,
+      timeout: 60000,
     },
   },
 };
