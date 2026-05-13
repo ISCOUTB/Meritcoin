@@ -394,7 +394,6 @@ if ($tab === 'transactions') {
                 <th><?= get_string('colcourse', 'local_meritcoin') ?></th>
                 <th><?= get_string('adminteacher', 'local_meritcoin') ?></th>
                 <th><?= get_string('colactivity', 'local_meritcoin') ?></th>
-                <th><?= get_string('colgrade', 'local_meritcoin') ?></th>
                 <th class="text-end"><?= get_string('colcoins', 'local_meritcoin') ?></th>
                 <th><?= get_string('colstatus', 'local_meritcoin') ?></th>
               </tr>
@@ -407,7 +406,6 @@ if ($tab === 'transactions') {
                   <td class="small"><?= s($e->coursename) ?></td>
                   <td class="small text-muted"><?= s($e->teachername ?: '—') ?></td>
                   <td class="small"><?= s($e->activity_name ?: '—') ?></td>
-                  <td><?= $e->grade !== null ? number_format((float)$e->grade, 1) : '—' ?></td>
                   <td class="text-end fw-bold text-success">+<?= number_format((float)$e->coins_amount, 2) ?></td>
                   <td><?= local_meritcoin_status_badge($e->status) ?></td>
                 </tr>

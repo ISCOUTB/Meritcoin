@@ -261,11 +261,9 @@ echo $OUTPUT->header();
           <table class="table table-hover mb-0">
             <thead class="table-light">
               <tr>
-                <th><?= get_string('coltype', 'local_meritcoin') ?></th>
                 <th><?= get_string('colcourse', 'local_meritcoin') ?></th>
                 <th><?= get_string('colactivity', 'local_meritcoin') ?></th>
-                <th><?= get_string('colgrade', 'local_meritcoin') ?></th>
-                <th><?= get_string('col_reevals', 'local_meritcoin') ?></th>
+                <th><?= get_string('colcoins', 'local_meritcoin') ?></th>
                 <th><?= get_string('colstatus', 'local_meritcoin') ?></th>
                 <th><?= get_string('coldate', 'local_meritcoin') ?></th>
               </tr>
@@ -277,17 +275,6 @@ echo $OUTPUT->header();
                 $reevals = (int)($event->reeval_count ?? 0);
               ?>
                 <tr>
-                  <td>
-                    <?php if ($event->event_type === 'completion'): ?>
-                      <span class="badge bg-success">
-                        <i class="fa fa-check-circle me-1"></i><?= get_string('typecompletion', 'local_meritcoin') ?>
-                      </span>
-                    <?php else: ?>
-                      <span class="badge bg-primary">
-                        <i class="fa fa-star me-1"></i><?= get_string('typegrade', 'local_meritcoin') ?>
-                      </span>
-                    <?php endif; ?>
-                  </td>
                   <td class="text-truncate" style="max-width:160px;"
                       title="<?= s($course ? $course->fullname : '') ?>">
                     <?= s($course ? $course->fullname : 'Curso ' . $event->courseid) ?>
@@ -296,21 +283,7 @@ echo $OUTPUT->header();
                       title="<?= s($activitylabel) ?>">
                     <?= s($activitylabel) ?>
                   </td>
-                  <td>
-                    <?= $event->grade !== null
-                        ? number_format((float)$event->grade, 1)
-                        : '<span class="text-muted">—</span>' ?>
-                  </td>
-                  <td class="text-center">
-                    <?php if (!empty($event->cmid) && $reevals > 1): ?>
-                      <span class="badge bg-warning text-dark"
-                            title="<?= get_string('col_reevals_hint', 'local_meritcoin') ?>">
-                        <i class="fa fa-refresh me-1"></i><?= $reevals ?>
-                      </span>
-                    <?php else: ?>
-                      <span class="text-muted">—</span>
-                    <?php endif; ?>
-                  </td>
+                  <td class="text-end fw-bold text-success">+<?= number_format((float)$e->coins_amount, 2) ?></td>
                   <td><?= local_meritcoin_status_badge($event->status) ?></td>
                   <td class="text-nowrap">
                     <?= userdate($event->timecreated, get_string('strftimedatetimeshort', 'langconfig')) ?>
