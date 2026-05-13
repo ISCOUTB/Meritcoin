@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - [http://moodle.org/](http://moodle.org/)
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -29,14 +29,14 @@
  *   3. Instancia rule_form con el courseid y la regla (o null para alta).
  *   4. Si el usuario cancela: redirige a manage.php.
  *   5. Si el formulario es válido: guarda (insert o update) y redirige a manage.php.
- *   6. Si no: muestra el formulario.
+ *   6. Si no: muestra el formulario con el error correspondiente.
  *
  * Permisos requeridos:
  *   - local/meritcoin:manage_rules sobre el contexto del curso.
  *
  * @package    local_meritcoin
  * @copyright  2026 Universidad Tecnológica de Bolívar
- * @license    [http://www.gnu.org/copyleft/gpl.html](http://www.gnu.org/copyleft/gpl.html) GNU GPL v3 or later
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require_once(__DIR__ . '/../../config.php');
@@ -106,31 +106,66 @@ if ($form->is_cancelled()) {
 // ── Guardar ───────────────────────────────────────────────────────────────────
 if ($formdata = $form->get_data()) {
 
-    $scope        = clean_param($formdata->rule_scope, PARAM_ALPHA);
-    $cmid         = (int)($formdata->cmid ?? 0);
-    $modtype      = clean_param($formdata->mod_type ?? '', PARAM_ALPHANUMEXT);
-    $coinsamount  = round((float)$formdata->coins_amount, 2);
-    $coinsymbol   = clean_param($formdata->coin_symbol, PARAM_TEXT);
-    $enabled      = (int)$formdata->enabled;
-    $mingraderaw  = trim($formdata->min_grade ?? '');
-    $mingrade     = ($mingraderaw !== '' && is_numeric($mingraderaw)) ? (float)$mingraderaw : null;
-    $now          = time();
+    $scope       = clean_param($formdata->rule_scope, PARAM_ALPHANUMEXT);
+    $cmid        = (int)($formdata->cmid ?? 0);
+    $modtype     = clean_param($formdata->mod_type ?? '', PARAM_ALPHANUMEXT);
+    $coinsamount = round((float)$formdata->coins_amount, 2);
+    $coinsymbol  = clean_param($formdata->coin_symbol, PARAM_TEXT);
+    $enabled     = (int)$formdata->enabled;
+    $mingraderaw = trim($formdata->min_grade ?? '');
+    $mingrade    = ($mingraderaw !== '' && is_numeric($mingraderaw)) ? (float)$mingraderaw : null;
+    $now         = time();
+
+    // ── Validación server-side de scope + campos dependientes ────────────────
+    // Necesaria porque hideIf de Moodle solo oculta visualmente pero sigue
+    // enviando todos los campos en el POST, y la validación client-side puede
+    // no dispararse si JS falla o el campo oculto llega vacío.
+    if (!in_array($scope, ['course', 'activity_type', 'activity'])) {
+        \core\notification::error(get_string('invaliddata', 'error'));
+        echo $OUTPUT->header();
+        echo $OUTPUT->heading($PAGE->heading);
+        $form->display();
+        echo $OUTPUT->footer();
+        exit;
+    }
+
+    if ($scope === 'activity' && $cmid <= 0) {
+        \core\notification::error(get_string('required') . ': ' . get_string('activity'));
+        echo $OUTPUT->header();
+        echo $OUTPUT->heading($PAGE->heading);
+        $form->display();
+        echo $OUTPUT->footer();
+        exit;
+    }
+
+    if ($scope === 'activity_type' && empty($modtype)) {
+        \core\notification::error(get_string('required') . ': ' . get_string('rule_mod_type', 'local_meritcoin'));
+        echo $OUTPUT->header();
+        echo $OUTPUT->heading($PAGE->heading);
+        $form->display();
+        echo $OUTPUT->footer();
+        exit;
+    }
+
+    // ── Resolver activityname, cmid y modtype según scope ────────────────────
     $activityname = '';
 
-    if ($scope === 'activity' && $cmid > 0) {
+    if ($scope === 'activity') {
         $modinfo      = get_fast_modinfo($courseid);
         $cm           = $modinfo->get_cm($cmid);
         $activityname = $cm->name;
-    } else if ($scope === 'activity_type' && $modtype !== '') {
+        $modtype      = null;
+    } else if ($scope === 'activity_type') {
         $activityname = get_string('pluginname', 'mod_' . $modtype);
         $cmid         = null;
     } else {
-        $scope        = 'course';
+        // scope === 'course'
         $cmid         = null;
         $modtype      = null;
         $activityname = 'Regla general del curso';
     }
 
+    // ── Persistir ────────────────────────────────────────────────────────────
     if ($ruleid > 0) {
         $record               = new stdClass();
         $record->id           = $ruleid;
@@ -148,7 +183,7 @@ if ($formdata = $form->get_data()) {
         \core\notification::success(get_string('rule_updated', 'local_meritcoin'));
 
     } else {
-        // Buscar regla duplicada según scope
+        // Buscar regla duplicada según scope para hacer upsert
         if ($scope === 'activity') {
             $existing = $DB->get_record('local_meritcoin_rules', [
                 'courseid'   => $courseid,
@@ -172,10 +207,12 @@ if ($formdata = $form->get_data()) {
         }
 
         if ($existing) {
+            $existing->rule_scope   = $scope;
             $existing->activityname = $activityname;
             $existing->coins_amount = $coinsamount;
             $existing->coin_symbol  = $coinsymbol;
             $existing->min_grade    = $mingrade;
+            $existing->cmid         = ($scope === 'activity') ? $cmid : null;
             $existing->mod_type     = ($scope === 'activity_type') ? $modtype : null;
             $existing->enabled      = $enabled;
             $existing->timemodified = $now;
