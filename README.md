@@ -9,40 +9,90 @@ Desarrollado como proyecto académico en la **Universidad Tecnológica de Bolív
 ## Arquitectura
 
 ```text
-+------------------+      HMAC/POST       +------------------+
-|                  |  ----------------->  |                  |
-|   Moodle (LMS)   |                      |  FastAPI Backend  |
-|  Plugin PHP v0.5 |  <-----------------  |   (off-chain)    |
-|                  |      JSON Response   |                  |
-+------------------+                      +--------+---------+
-                                                   |
-                                    +--------------+---------------+
-                                    v              v               v
-                             +-----------+  +-----------+  +------------+
-                             | PostgreSQL |  |   IPFS    |  | Blockchain |
-                             |  (audit)   |  |  (Kubo)   |  |   (Besu)   |
-                             +-----------+  +-----------+  +------------+
-                                                                |
-                                                     +----------+----------+
-                                                     v                     v
-                                              +-------------+      +-------------+
-                                              | ERC-1155    |      | ERC-20      |
-                                              | MeritBadges |      | MeritCoin   |
-                                              +-------------+      +-------------+
++---------------------------+
+|     Dapp / Moodle Plugin  |  ← equivale al "Dapp/wallet"
+|  (PHP, dashboard, market) |
++------------+--------------+
+             | HMAC-SHA256 / POST
+             v
++============================================+
+|            Interface Layer                 |
+|    FastAPI REST · /events · /students      |  ← JSON-RPC equivalente
+|    /tokens · /wallets · /health            |
++========+===================+===============+
+         |                   |
++--------+-------+  +--------+---------+
+|   Execution    |  |    Off-chain DB  |  
+|   Core         |  |                  |
+|                |  | PostgreSQL       |
+| Event ingest   |  |  audit_log       |
+| Rules engine   |  |  events          |
+| HMAC verifier  |  |                  |
+| Badge builder  |  | MariaDB (Moodle) |
+|   (OBv2 meta)  |  |  queue / rules   |
++--------+-------+  +------------------+
+         |
++--------+--------+
+|  IPFS (Kubo)    |  ← almacenamiento descentralizado de metadatos OBv2
+|  nodo local     |
+|  modo --offline |
++--------+--------+
+         |
++========+==============================+
+|        Besu Core  (red privada)       |
+|                                       |
+|  Networking       Execution-Core      |
+|  ─────────        ─────────────       |
+|  Discovery        Transaction pool    |
+|  RLPx             Synchronizer        |
+|  ETH sub-proto    Block validator     |
+|  QBFT sub-proto   └─ Tx processor     |
+|  4 nodos          EVM                 |
+|  (bootnode+3)     Pluggable consensus |
+|                   QBFT PoA            |
+|                                       |
+|  Storage                              |
+|  ───────                              |
+|  World state (Trie Bonsai)            |
+|  Blockchain                           |
++========+==============================+
+         |
++--------+--------------------+
+|   Smart Contracts (Solidity)|
+|                             |
+|  ERC-20 MeritCoinERC20      |
+|   - mint / burn             |
+|   - MINTER_ROLE             |
+|   - BURNER_ROLE             |
+|                             |
+|  ERC-1155 MeritBadges1155   |
+|   - mintBadge               |
+|   - ISSUER_ROLE             |
+|   - metadata URI → IPFS     |
++-----------------------------+
 ```
-
 
 ---
 
 ## Flujo de funcionamiento
 
-1. Un estudiante completa una actividad o recibe una calificación en Moodle
-2. El **observer** del plugin captura el evento y calcula las monedas MRT según las reglas configuradas por el profesor en `local_meritcoin_rules`
-3. Se verifica que el estudiante no haya superado el **límite de MRT por curso** (configurable, 16 MRT por defecto) — si lo supera, el evento es descartado
-4. El evento se encola en `local_meritcoin_queue` con estado `pending` (o `pending_wallet` si el estudiante aún no tiene wallet en cursos piloto)
-5. Una **tarea programada** envía el evento al backend FastAPI firmado con HMAC-SHA256
-6. El backend genera metadatos **Open Badges v2 (OBv2)**, los sube a IPFS (Kubo) y llama a los contratos: `mintBadge` (ERC-1155) y `mint` MRT (ERC-20) en **Besu**
-7. El resultado queda registrado en `local_meritcoin_earnings` (ganancias por curso) y en PostgreSQL (audit_log) para trazabilidad completa
+1. Un estudiante completa una actividad o recibe una calificación en Moodle.
+2. El **observer** del plugin (`observer.php`) captura el evento Moodle (`core\event\*`) y consulta `local_meritcoin_rules` para calcular las monedas MRT según el tipo de actividad y la nota mínima configurada por el profesor.
+3. Se verifica que el estudiante no haya superado el **límite de MRT por curso** consultando `local_meritcoin_earnings` — si lo supera, el evento es descartado silenciosamente.
+4. **Detección de wallet:**
+   - **Curso normal:** el observer lee el campo de perfil `wallet` del estudiante. Si no tiene wallet registrada, el evento es descartado.
+   - **Curso piloto:** si el estudiante aún no tiene wallet custodial, el evento se encola con `status = pending_wallet` y `wallet_service` llama a `POST /wallets/provision` en el backend para crearla automáticamente. Una vez provisionada, el estado pasa a `pending`.
+5. El evento se encola en `local_meritcoin_queue` con `status = pending`, incluyendo `event_id` (MD5 de `userid+cmid+grade`) para garantizar idempotencia.
+6. La **tarea programada** `send_events_task` (cron cada minuto) toma los eventos `pending`, firma el payload con **HMAC-SHA256** usando `HMAC_SECRET` y lo envía a `POST /events/ingest` en el backend FastAPI.
+7. El backend valida la firma HMAC, verifica que el `event_id` no haya sido procesado previamente y:
+   - a. Genera los metadatos de la insignia en formato **Open Badges v2 (OBv2)**.
+   - b. Sube los metadatos al nodo **IPFS local (Kubo)** y obtiene el CID (`ipfs://...`).
+   - c. Llama al contrato ERC-1155 (`mintBadge`) con el URI del CID como metadata de la insignia.
+   - d. Llama al contrato ERC-20 (`mint`) para acreditar los MRT en la wallet del estudiante.
+   - e. Ambas transacciones se ejecutan en la red privada **Hyperledger Besu (QBFT)**.
+8. El backend registra el resultado en **PostgreSQL** (`audit_log`, `events`) para trazabilidad completa.
+9. El plugin actualiza el evento en `local_meritcoin_queue` a `status = sent` y registra las ganancias en `local_meritcoin_earnings`, manteniendo el ledger del límite por curso.
+10. El estudiante consulta su saldo MRT e insignias en tiempo real desde **MeritCoin → Mi Dashboard**, que llama a `GET /students/{wallet}/summary` en el backend.
 
 ---
 
