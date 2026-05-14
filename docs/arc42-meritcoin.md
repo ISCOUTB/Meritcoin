@@ -1,13 +1,3 @@
----
-header-includes:
-  - \usepackage{fontspec}
-  - \setmonofont{DejaVu Sans Mono}
-mainfont: DejaVu Serif
-monofont: DejaVu Sans Mono
-lang: es
-geometry: margin=2.5cm
----
-
 # Documento de Arquitectura del Software — MeritCoin
 
 **Formato:** ARC42 — Versión 1.0
