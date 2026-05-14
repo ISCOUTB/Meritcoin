@@ -4,8 +4,8 @@
 **Proyecto:** MeritCoin — Sistema de Recompensas Académicas Digitales  
 **Institución:** Universidad Tecnológica de Bolívar  
 **Fecha:** Mayo 2026  
-**Estado:** MVP completo — integración IPFS local (Kubo) activa  
-**Rama principal de desarrollo:** `feature/ipfs-local-node`
+**Estado:** Completado 
+**Rama principal de desarrollo:** `main`
 
 ---
 

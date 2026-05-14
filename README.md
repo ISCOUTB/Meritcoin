@@ -712,12 +712,12 @@ Ver documentación detallada en [`contracts/README.md`](./contracts/README.md).
 | 3 | Backend FastAPI (Python) | ✅ Completa |
 | 4 | Plugin Moodle — core (observer, task, queue) | ✅ Completa |
 | 5 | Prueba de flujo completo (E2E) | ✅ Completa |
-| 6 | Gestión de reglas por curso | ✅ Completa |
-| 7 | Ledger de ganancias y gasto por curso | ✅ Completa |
-| 8 | Dashboard del estudiante + Marketplace | ✅ Completa |
-| 9 | Insignias personalizadas por curso | ✅ Completa |
-| 10 | Integración Hyperledger Besu (QBFT, 4 nodos) | ✅ Completa |
-| 11 | MVP final + integración IPFS local (Kubo) | ✅ Completa |
+| 6 | Gestión de reglas por curso (manage.php, editrule.php, rules_service) | ✅ Completa |
+| 7 | Ledger de ganancias y gasto por curso (earnings, spend) | ✅ Completa |
+| 8 | Dashboard del estudiante + Mercado de recompensas | ✅ Completa |
+| 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | ✅ Completa |
+| 10 | Integración Hyperledger Besu (red privada QBFT, 4 nodos) | ✅ Completa |
+| 11 | Finalizacion del MVP | ✅ Completa |
 
 ---
 
