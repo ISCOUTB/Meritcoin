@@ -3,6 +3,7 @@
 **Formato:** ARC42 — Versión 1.0
 **Proyecto:** MeritCoin (MRT) — Sistema de Recompensas Académicas Digitales
 **Institución:** Universidad Tecnológica de Bolívar (UTB)
+**Autores:** Alfonso David Grateron Cabarcas, Alejandro Sanchez Diaz
 **Fecha:** Mayo de 2026
 **Estado del sistema:** MVP funcional, validado de extremo a extremo en entorno Docker con red privada Hyperledger Besu (QBFT, 4 nodos).
 **Rama principal de desarrollo:** `main`
