@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ override: true });
 require("@nomicfoundation/hardhat-toolbox");
 
 // Falla explícitamente si faltan las claves — nunca usar fallbacks hardcodeados
@@ -24,18 +24,15 @@ module.exports = {
     },
   },
   networks: {
-    localhost: {
-      url: "http://127.0.0.1:8545",
-    },
     besu: {
       url: process.env.BESU_RPC_URL || "http://localhost:8545",
       chainId: 1337,
-      accounts: isDeployTask ? [
+      accounts: [                      
         requireEnv("BESU_PRIVATE_KEY_1"),
         requireEnv("BESU_PRIVATE_KEY_2"),
         requireEnv("BESU_PRIVATE_KEY_3"),
         requireEnv("BESU_PRIVATE_KEY_4"),
-      ] : [],
+      ],
       gas: 8000000,
       gasPrice: 0,
       timeout: 60000,
