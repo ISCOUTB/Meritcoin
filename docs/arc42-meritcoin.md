@@ -34,7 +34,7 @@ El alcance del MVP incluye:
 - **Verificación pública** de insignias por hash y **certificado PDF** descargable, sin requerir autenticación.
 - Trazabilidad y auditoría completas de los flujos.
 
-Quedan **fuera del alcance** del MVP actual: integración con redes EVM públicas (mainnet/L2), uso de relayer/paymaster con meta-transacciones EIP-712, pinning real en IPFS, integración LTI 1.3 / OIDC con el SSO institucional, y conversión de MRT a moneda fiat.
+Quedan **fuera del alcance** del MVP actual: integración nativa con SAVIO —plataforma institucional de la Universidad Tecnológica de Bolívar—, el pinning real en IPFS mediante servicios como Pinata o web3.storage para garantizar la persistencia permanente de los metadatos de insignias, el hardening de seguridad con rotación de claves y gestión centralizada de secretos, la separación de ambientes (dev/stage/prod) con orquestación en Kubernetes, y la incorporación de observabilidad mediante paneles Prometheus/Grafana con alertas sobre fallos en cola, backend o red Besu.
 
 ### 1.3 Problema que resuelve
 
@@ -180,7 +180,7 @@ El sistema opera como una extensión natural del LMS: el profesor configura las 
 
 ## 5. Requerimientos
 
-Los requerimientos están consolidados a partir del SAD original del proyecto y de la implementación actual del repositorio. Cada requerimiento incluye su **estado de implementación** (Implementado / Parcial / Planificado).
+Los requerimientos están consolidados a partir de la primera versión del SAD del proyecto, junto con la implementación actual del repositorio. Cada requerimiento incluye su **estado de implementación** (Implementado / Parcial / Planificado).
 
 ### 5.1 Requerimientos Funcionales (RF)
 
@@ -755,84 +755,84 @@ MeritCoin no requiere una ecuación económica de intercambio entre mercaderes, 
 
 Sea un evento académico:
 
-\[
+$
 e = (u, c, a, m, g, t)
-\]
+$
 
 donde:
 
-- \(u\): estudiante.
-- \(c\): curso.
-- \(a\): actividad específica.
-- \(m\): tipo de módulo Moodle, por ejemplo tarea, cuestionario o foro.
-- \(g\): calificación o resultado del estudiante.
-- \(t\): tipo de evento académico.
+- $u$: estudiante.
+- $c$: curso.
+- $a$: actividad específica.
+- $m$: tipo de módulo Moodle, por ejemplo tarea, cuestionario o foro.
+- $g$: calificación o resultado del estudiante.
+- $t$: tipo de evento académico.
 
-Sea \(R_c\) el conjunto de reglas activas del curso \(c\). Cada regla \(r \in R_c\) tiene una prioridad, una condición de aplicación y una cantidad de monedas \(v(r)\). La prioridad aplicada por el MVP es:
+Sea $R_c$ el conjunto de reglas activas del curso $c$. Cada regla $r \in R_c$ tiene una prioridad, una condición de aplicación y una cantidad de monedas $v(r)$. La prioridad aplicada por el MVP es:
 
-\[
+$
 \text{actividad específica} > \text{tipo de módulo} > \text{curso}
-\]
+$
 
 La regla efectiva se define como:
 
-\[
-r^\*(e) = \arg\max_{r \in R_c} \left( prioridad(r) \right)
+$$
+r^{\ast}(e) = \arg\max_{r \in R_c} \left( prioridad(r) \right)
 \quad \text{sujeto a que } r \text{ aplique sobre } (a,m,g)
-\]
+$$
 
 La recompensa bruta del evento es:
 
-\[
+$$
 MRT_{bruto}(e) =
 \begin{cases}
-v(r^\*(e)), & \text{si existe una regla aplicable y el evento no fue procesado antes} \\
+v(r^{\ast}(e)), & \text{si existe una regla aplicable y el evento no fue procesado antes} \\
 0, & \text{si no hay regla aplicable o el evento es duplicado}
 \end{cases}
-\]
+$$
 
 Para respetar el límite máximo de monedas por estudiante y curso, la recompensa efectiva es:
 
-\[
+$$
 MRT(e) = \min \left( MRT_{bruto}(e),\ L_c - G_{u,c} \right)
-\]
+$$
 
 donde:
 
-- \(L_c\): límite máximo de MRT permitido para el estudiante dentro del curso.
-- \(G_{u,c}\): total acumulado de MRT ya ganado por el estudiante \(u\) en el curso \(c\).
+- $L_c$: límite máximo de MRT permitido para el estudiante dentro del curso.
+- $G_{u,c}$: total acumulado de MRT ya ganado por el estudiante $u$ en el curso $c$.
 
-Si \(L_c - G_{u,c} \le 0\), el sistema registra el evento pero no emite nuevas monedas.
+Si $L_c - G_{u,c} \le 0$, el sistema registra el evento pero no emite nuevas monedas.
 
 #### Saldo disponible por curso
 
 El saldo disponible para canje en un curso se calcula como:
 
-\[
+$$
 S_{u,c} = \sum_{e \in E_{u,c}} MRT(e) - \sum_{x \in X_{u,c}} precio(x)
-\]
+$$
 
 donde:
 
-- \(E_{u,c}\): eventos válidos del estudiante \(u\) en el curso \(c\).
-- \(X_{u,c}\): recompensas canjeadas por el estudiante en el curso.
-- \(precio(x)\): costo en MRT de la recompensa \(x\).
+- $E_{u,c}$: eventos válidos del estudiante $u$ en el curso $c$.
+- $X_{u,c}$: recompensas canjeadas por el estudiante en el curso.
+- $precio(x)$: costo en MRT de la recompensa $x$.
 
 #### Condición de autorización de canje
 
-Un canje de recompensa \(x\) se autoriza solo si se cumplen dos condiciones:
+Un canje de recompensa $x$ se autoriza solo si se cumplen dos condiciones:
 
-\[
+$$
 S_{u,c} \ge precio(x)
 \quad \land \quad
 B_{chain}(wallet_u) \ge precio(x)
-\]
+$$
 
-donde \(B_{chain}(wallet_u)\) es el balance real ERC-20 consultado en la blockchain. Si ambas condiciones se cumplen, el sistema ejecuta:
+donde $B_{chain}(wallet_u)$ es el balance real ERC-20 consultado en la blockchain. Si ambas condiciones se cumplen, el sistema ejecuta:
 
-\[
+$$
 B_{chain}'(wallet_u) = B_{chain}(wallet_u) - precio(x)
-\]
+$$
 
 operacionalmente implementado como una transacción `burnFrom(wallet_u, precio(x))` sobre el contrato ERC-20.
 
@@ -840,16 +840,16 @@ operacionalmente implementado como una transacción `burnFrom(wallet_u, precio(x
 
 Para justificar el comportamiento temporal del algoritmo en la red Besu privada, puede expresarse el tiempo total de emisión como:
 
-\[
+$$
 T_{total} = T_{cola} + T_{api} + T_{tx} + T_{sync}
-\]
+$$
 
 donde:
 
-- \(T_{cola}\): espera hasta que la tarea programada de Moodle envía el evento; en el MVP puede ser hasta aproximadamente un minuto.
-- \(T_{api}\): tiempo de validación HMAC, idempotencia y persistencia en backend.
-- \(T_{tx}\): tiempo de inclusión y finalidad de la transacción en Besu; en la red configurada depende del `blockperiodseconds`.
-- \(T_{sync}\): tiempo hasta que Moodle actualiza la UI local con el resultado.
+- $T_{cola}$: espera hasta que la tarea programada de Moodle envía el evento; en el MVP puede ser hasta aproximadamente un minuto.
+- $T_{api}$: tiempo de validación HMAC, idempotencia y persistencia en backend.
+- $T_{tx}$: tiempo de inclusión y finalidad de la transacción en Besu; en la red configurada depende del `blockperiodseconds`.
+- $T_{sync}$: tiempo hasta que Moodle actualiza la UI local con el resultado.
 
 Con esto, MeritCoin sí posee una formulación algorítmica propia, pero su foco no es maximizar utilidad económica, sino garantizar **equidad académica, idempotencia, trazabilidad y validez de canje**.
 
