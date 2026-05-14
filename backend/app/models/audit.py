@@ -6,7 +6,7 @@ Tablas:
   - audit_log: Trazabilidad de cada emisión (IPFS CID, tx hashes).
 """
 
-from sqlalchemy import Column, DateTime, Float, String, Text, func
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, func
 
 from app.core.database import Base
 
@@ -59,3 +59,19 @@ class AuditLog(Base):
     badge_id   = Column(String(255), nullable=True)
     mrt_amount = Column(String(255), nullable=True)  # String para preservar precisión decimal
     created_at = Column(DateTime,    server_default=func.now(), nullable=False)
+
+class PendingTransaction(Base):
+    """Transacciones blockchain que fallaron y esperan reintento."""
+    __tablename__ = "pending_transactions"
+
+    id        = Column(Integer, primary_key=True, autoincrement=True)
+    event_id  = Column(String(255), nullable=False, index=True)
+    tx_type   = Column(String(20),  nullable=False)   # 'mint_mrt', 'mint_badge'
+    wallet    = Column(String(42),  nullable=False)
+    amount    = Column(Float,       nullable=True)     # MRT
+    badge_id  = Column(String(255), nullable=True)
+    uri       = Column(Text,        nullable=True)
+    attempts  = Column(Integer,     default=0)
+    last_error= Column(Text,        nullable=True)
+    created_at= Column(DateTime,    server_default=func.now())
+    retry_after= Column(DateTime,   nullable=True)    # backoff

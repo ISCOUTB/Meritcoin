@@ -109,6 +109,7 @@ class BadgeAward(Base):
     revoked_at     = Column(DateTime,    nullable=True)
     revoked_by_id  = Column(String(255), nullable=True)
     tx_hash        = Column(String(66),  nullable=True)
+    ipfs_cid       = Column(String(255), nullable=True)
     chain_status   = Column(String(20),  nullable=False, default="pending")
     issued_at      = Column(DateTime,    server_default=func.now(), nullable=False)
 

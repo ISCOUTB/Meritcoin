@@ -47,13 +47,16 @@ class Settings(BaseSettings):
     badge_contract_address: str = ""
     mrt_contract_address: str = ""
 
-    # ── CORS ─────────────────────────────────────────────────────────────────
-    cors_origins: List[str] = ["*"]
-
     # ── Wallets custodiales ───────────────────────────────────────────────────────
     # Generar con: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     # OBLIGATORIO si se usa el sistema de wallets custodiales.
     wallet_encryption_key: str = ""
 
+    # ── IPFS ───────────────────────────────────────────────────────────────
+    ipfs_api_url: str = "http://ipfs:5001"
+    ipfs_gateway_url: str = "http://localhost:8090"
+
+    # ── URL pública del backend ────────────────────────────────────────────
+    public_base_url: str = "http://localhost:8000"
 
 settings = Settings()

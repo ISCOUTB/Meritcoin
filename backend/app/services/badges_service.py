@@ -27,6 +27,7 @@ from app.models.badges_schema import (
     PublicVerifyResponse,
 )
 from app.services.blockchain import blockchain
+from app.services.ipfs_service import upload_json_to_ipfs, get_ipfs_gateway_url
 
 logger = logging.getLogger(__name__)
 
@@ -304,6 +305,15 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
       3. Si la plantilla tiene mrt_reward, acuñar MRT (no bloquea el badge).
       4. Guardar el BadgeAward en BD.
     """
+
+    cid: Optional[str] = None
+    try:
+        cid = await upload_json_to_ipfs(badge_metadata)
+        badge_uri = await get_ipfs_gateway_url(cid)
+    except Exception as exc:
+        logger.warning("IPFS no disponible, usando URI fallback: %s", exc)
+        badge_uri = f"{settings.public_base_url}/badges/{data.template_id}"
+
     template = await get_template(db, data.template_id)
     if not template.is_active:
         raise HTTPException(
@@ -322,7 +332,22 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
     # badge_id uint256: derivado del UUID del template (reproducible y único)
     badge_id = int(data.template_id.replace("-", ""), 16) % (2 ** 256)
     # La URI apunta al endpoint público de verificación configurado en settings
-    badge_uri = f"{settings.public_base_url}/badges/{data.template_id}"
+    badge_metadata = {
+        "@context": "https://w3id.org/openbadges/v2",
+        "type": "BadgeClass",
+        "id": f"{settings.public_base_url}/badges/{data.template_id}",
+        "name": template.name,
+        "description": template.description,
+        "image": template.image_url,
+        "criteria": {"narrative": template.criteria or ""},
+    }
+
+    try:
+        cid = await upload_json_to_ipfs(badge_metadata)
+        badge_uri = await get_ipfs_gateway_url(cid)
+    except Exception as exc:
+        logger.warning("IPFS no disponible, usando URI fallback: %s", exc)
+        badge_uri = f"{settings.public_base_url}/badges/{data.template_id}"
 
     tx_hash: Optional[str] = None
     chain_status = "pending"
@@ -361,6 +386,7 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
         course_id=data.course_id,
         tx_hash=tx_hash,
         chain_status=chain_status,
+        ipfs_cid=cid,
     )
     db.add(award)
     await db.commit()
@@ -462,6 +488,66 @@ async def get_public_verification(db: AsyncSession, award_id: str) -> PublicVeri
         issued_at=award.issued_at,
         chain_status=award.chain_status,
         tx_hash=award.tx_hash,
+        ipfs_cid=award.ipfs_cid,
+        ipfs_url=f"{settings.ipfs_gateway_url}/ipfs/{award.ipfs_cid}" if award.ipfs_cid else None,
         revoked=award.revoked,
         revoked_at=award.revoked_at,
     )
+
+async def retry_chain(db: AsyncSession, award_id: str) -> BadgeAward:
+    """
+    Reintenta el mint en blockchain de un award que quedó con
+    chain_status 'skipped' o 'failed'.
+    """
+    # 1. Buscar el award
+    result = await db.execute(
+        select(BadgeAward)
+        .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))
+        .where(BadgeAward.id == award_id)
+    )
+    award = result.scalar_one_or_none()
+    if not award:
+        raise HTTPException(status_code=404, detail="Insignia no encontrada.")
+    if award.revoked:
+        raise HTTPException(status_code=400, detail="No se puede reintentar el mint de una insignia revocada.")
+    if award.chain_status == "confirmed":
+        raise HTTPException(status_code=409, detail="La insignia ya fue confirmada en blockchain.")
+    if not award.student_wallet:
+        raise HTTPException(status_code=422, detail="El award no tiene wallet — no es posible mintear.")
+    if not blockchain.is_connected():
+        raise HTTPException(status_code=503, detail="Nodo blockchain no disponible. Intenta más tarde.")
+
+    # 2. Reconstruir badge_id y URI (reutiliza CID existente si hay)
+    badge_id = int(award.template.id.replace("-", ""), 16) % (2 ** 256)
+    badge_uri = (
+        await get_ipfs_gateway_url(award.ipfs_cid)
+        if award.ipfs_cid
+        else f"{settings.public_base_url}/badges/{award.template.id}"
+    )
+
+    # 3. Mint badge
+    try:
+        tx_hash = await blockchain.mint_badge(award.student_wallet, badge_id, badge_uri)
+        award.tx_hash = tx_hash
+        award.chain_status = "confirmed"
+    except Exception as exc:
+        award.chain_status = "failed"
+        await db.commit()
+        raise HTTPException(status_code=502, detail=f"Error al mintear: {exc}")
+
+    # 4. Mint MRT opcional (no bloquea)
+    mrt_reward = getattr(award.template, "mrt_reward", None)
+    if mrt_reward and float(mrt_reward) > 0:
+        try:
+            await blockchain.mint_mrt(award.student_wallet, float(mrt_reward))
+        except Exception as exc:
+            logger.warning("Error MRT en retry (no crítico): %s", exc)
+
+    await db.commit()
+    # Refrescar con relaciones
+    result = await db.execute(
+        select(BadgeAward)
+        .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))
+        .where(BadgeAward.id == award.id)
+    )
+    return result.scalar_one()

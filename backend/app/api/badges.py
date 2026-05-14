@@ -163,6 +163,21 @@ async def award_badge(
 ) -> BadgeAwardResponse:
     return _map_award(await badges_service.award_badge(db, data))
 
+@router.post(
+    "/badges/award/{award_id}/retry-chain",
+    response_model=BadgeAwardResponse,
+    summary="Reintentar mint en blockchain",
+)
+async def retry_chain(
+    award_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> BadgeAwardResponse:
+    """
+    Reintenta el mint de un award con chain_status skipped o failed
+    sin crear un registro duplicado.
+    """
+    return _map_award(await badges_service.retry_chain(db, award_id))
+
 
 @router.get(
     "/badges/student/{student_id}",

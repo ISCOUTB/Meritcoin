@@ -36,13 +36,6 @@ if ($action === 'award' && $badgeid && $userid && $confirm && confirm_sesskey())
         MUST_EXIST
     );
 
-    // EXTRA: si el tipo es de sistema y el profesor no tiene la capability especial, lo bloqueamos
-    $syscontext = context_system::instance();
-    $typesconditions = ['enabled' => 1];
-    if (!has_capability('moodle/site:config', $syscontext)) {
-        $typesconditions['is_system'] = 0;
-    }
-
     $student = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
 
     // Verificar que el estudiante está en el curso
@@ -58,21 +51,49 @@ if ($action === 'award' && $badgeid && $userid && $confirm && confirm_sesskey())
     ]);
 
     if (!$already) {
-        $record              = new stdClass();
-        $record->userid      = $userid;
-        $record->courseid    = $courseid;
-        $record->badge_type  = $badge_type->shortname;
-        $record->badge_name  = $badge_type->name;
-        $record->description = $badge_type->description;
-        $record->criteria    = $badge_type->criteria ?? '';
-        $record->image_url   = $badge_type->imageurl ?? ''; // usa imageurl del tipo
-        $record->issued_by   = $USER->id;
-        $record->timecreated = time();
-        $record->verify_hash = hash(
-            'sha256',
-            $userid . $courseid . $badge_type->shortname . time() . random_bytes(16)
-        );
-        $DB->insert_record('local_meritcoin_badges', $record);
+      $record              = new stdClass();
+      $record->userid      = $userid;
+      $record->courseid    = $courseid;
+      $record->badge_type  = $badge_type->shortname;
+      $record->badge_name  = $badge_type->name;
+      $record->description = $badge_type->description;
+      $record->criteria    = $badge_type->criteria ?? '';
+      $record->image_url   = $badge_type->imageurl ?? '';
+      $record->issued_by   = $USER->id;
+      $record->timecreated = time();
+      $record->verify_hash = hash(
+          'sha256',
+          $userid . $courseid . $badge_type->shortname . time() . random_bytes(16)
+      );
+
+      // ── Llamada al backend ────────────────────────────────────────
+      $api_url = get_config('local_meritcoin', 'api_url') ?: 'http://172.19.0.6:8000';
+      $wallet = local_meritcoin_get_user_wallet($userid);
+
+      $payload = json_encode([
+          'template_id'    => $badge_type->backend_id,
+          'student_id'     => (string)$userid,
+          'student_wallet' => $wallet,
+          'issued_by_id'   => (string)$USER->id,
+          'issued_by_role' => has_capability('moodle/site:config', context_system::instance()) ? 'admin' : 'teacher',
+          'course_id'      => (string)$courseid,
+      ]);
+
+      $ch = curl_init("{$api_url}/badges/award");
+      curl_setopt_array($ch, [
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_POST           => true,
+          CURLOPT_POSTFIELDS     => $payload,
+          CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+          CURLOPT_TIMEOUT        => 10,
+      ]);
+      $resp         = curl_exec($ch);
+      curl_close($ch);
+      $api_response = $resp ? json_decode($resp) : null;
+      $record->award_id = $api_response->id ?? null;
+      // ─────────────────────────────────────────────────────────────
+
+      $DB->insert_record('local_meritcoin_badges', $record);
     }
 
     redirect(

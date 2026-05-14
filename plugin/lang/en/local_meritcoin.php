@@ -1,8 +1,5 @@
 <?php
 // This file is part of Moodle - http://moodle.org/
-//
-// @package local_meritcoin
-// @copyright 2026 Universidad Tecnológica de Bolívar
 // @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
 
 defined('MOODLE_INTERNAL') || die();
@@ -279,6 +276,7 @@ $string['badge_hash']                 = 'Verification hash';
 $string['verifybadge']                = 'Verify badge';
 $string['verify']                     = 'Verify';
 $string['balancelocal']               = 'local estimate';
+$string['verifications']              = 'Verifications';
 
 // ── Badge PDF certificate (badge_pdf.php) ─────────────────────────────────────
 $string['badge_pdf_certificate_label'] = 'Badge Certificate';
@@ -350,6 +348,7 @@ $string['badge_no_types_warning']     = 'No badge types are configured. Go to th
 $string['badge_col_badge']            = 'Badge';
 $string['badge_col_student']          = 'Student';
 $string['badge_col_verify']           = 'Verify';
+
 
 // ── Badge types admin (badge_types.php) ───────────────────────────────────────
 $string['badge_types_menu']            = 'MeritCoin – Badge types';

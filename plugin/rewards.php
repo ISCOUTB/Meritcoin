@@ -96,6 +96,9 @@ foreach ($rewards as $r) {
 $course_config = $DB->get_record('local_meritcoin_course_config', ['courseid' => $courseid]);
 $coin_symbol   = $course_config ? $course_config->coin_symbol : 'MRT';
 
+$PAGE->requires->js(new moodle_url('/local/meritcoin/styles/meritcoin_poll.js'));
+$PAGE->requires->js_init_code("MeritCoinPoll.start('rewards', 25000);");
+
 echo $OUTPUT->header();
 ?>
 

@@ -2,6 +2,7 @@
 MeritCoin Backend — Punto de entrada FastAPI.
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -14,6 +15,8 @@ from app.core.database import init_db
 from app.services.blockchain import blockchain
 
 from app.api.wallets import router as wallets_router
+
+from app.workers.processor import retry_loop
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -29,6 +32,9 @@ async def lifespan(app: FastAPI):
     logger.info("Iniciando MeritCoin Backend...")
     await init_db()
     logger.info("Tablas de BD creadas/verificadas")
+
+    asyncio.create_task(retry_loop())
+
     if blockchain.is_connected():
         logger.info("Conectado al nodo blockchain en %s", settings.blockchain_rpc_url)
     else:

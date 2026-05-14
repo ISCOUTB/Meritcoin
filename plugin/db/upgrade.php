@@ -572,6 +572,24 @@ function xmldb_local_meritcoin_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026051001, 'local', 'meritcoin');
     }
 
+    if ($oldversion < 2026051201) {
+        $table = new xmldb_table('local_meritcoin_badges');
+        $field = new xmldb_field('award_id', XMLDB_TYPE_CHAR, '36', null, false, false, null, 'verify_hash');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_plugin_savepoint(true, 2026051201, 'local', 'meritcoin');
+    }
+
+    if ($oldversion < 2026051202) {
+        $table = new xmldb_table('local_meritcoin_badge_templates');
+        $field = new xmldb_field('backend_id', XMLDB_TYPE_CHAR, '36', null, false, false, null, 'id');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_plugin_savepoint(true, 2026051202, 'local', 'meritcoin');
+    }
+
     return true;
 
 }

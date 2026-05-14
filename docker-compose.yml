@@ -116,6 +116,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ipfs:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -124,13 +126,40 @@ services:
       start_period: 10s
     networks:
       - meritcoin-net
+      - besu-network
+
+  # ── IPFS (para almacenamiento descentralizado) ─────────────────────────
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: meritcoin-ipfs
+    restart: unless-stopped
+    environment:
+      - IPFS_PROFILE=server
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+      - "8090:8080"
+    volumes:
+      - ipfs_data:/data/ipfs
+    networks:
+      - meritcoin-net
+    healthcheck:
+      test: ["CMD", "ipfs", "id"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s   
 
 volumes:
   mariadb_data:
   moodle_data:
   moodledata:
   postgres_data:
+  ipfs_data:  
 
 networks:
   meritcoin-net:
     driver: bridge
+  besu-network:         
+    external: true
+    name: qbft-network_besu-network

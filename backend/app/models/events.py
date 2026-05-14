@@ -9,7 +9,7 @@ Modelos:
   - StudentBalance: Saldo MRT de un estudiante.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import Enum
 from typing import Optional
 
@@ -48,7 +48,7 @@ class AcademicEvent(BaseModel):
     coins_amount:   Optional[float] = Field(None, ge=0, description="Tokens a acuñar, calculados en Moodle")
     coin_symbol:    Optional[str]   = Field("MRT",       description="Símbolo de la moneda del curso")
     coin_name:      Optional[str]   = Field("MeritCoin", description="Nombre completo de la moneda")
-    timestamp:      datetime        = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp:      datetime        = Field(default_factory=lambda: datetime.now())
 
     model_config = {"json_schema_extra": {"example": {
         "event_id":       "evt-moodle-3-5-42-grade-1741651200",
@@ -79,7 +79,7 @@ class EventResponse(BaseModel):
 
 class StudentBadge(BaseModel):
     """Representación de una insignia en el historial de un estudiante."""
-    badge_id:      int
+    badge_id:      str
     course_id:     str
     course_name:   str
     activity_name: Optional[str] = None

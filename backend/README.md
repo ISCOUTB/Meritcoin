@@ -2,53 +2,71 @@
 
 Servicio FastAPI off-chain que recibe eventos académicos del plugin Moodle,
 valida la firma HMAC, acuña tokens MRT (ERC-20) e insignias (ERC-1155) en
-Hyperledger Besu, gestiona wallets custodiales por semestre y registra
-toda la auditoría en PostgreSQL.
+Hyperledger Besu, gestiona wallets custodiales por semestre, sube metadatos
+de insignias a un nodo IPFS local (Kubo) y registra toda la auditoría en
+PostgreSQL.
 
 ## Estructura
 
-```
+```text
 backend/
-├── app/
-│   ├── api/
-│   │   ├── events.py       # POST /events/ingest
-│   │   ├── students.py     # GET /students/{wallet}/badges|balance|summary
-│   │   ├── tokens.py       # POST /tokens/spend
-│   │   ├── badges.py       # CRUD de skills, templates, awards y verificación pública
-│   │   └── wallets.py      # POST /wallets/provision, GET, expire-course, PATCH
-│   ├── core/
-│   │   ├── config.py       # Settings con pydantic-settings (variables de entorno)
-│   │   ├── database.py     # AsyncSession SQLAlchemy + asyncpg
-│   │   ├── security.py     # verify_hmac (dependency), compute_hmac
-│   │   └── wallet_crypto.py  # Encriptación/desencriptación Fernet de claves privadas
-│   ├── models/
-│   │   ├── events.py       # AcademicEvent, EventResponse, StudentBadge, StudentBalance
-│   │   ├── audit.py        # EventRecord, AuditLog (tablas SQLAlchemy)
-│   │   ├── badges.py       # BadgeTemplate, BadgeAward, Skill (tablas SQLAlchemy)
-│   │   ├── badges_schema.py  # Schemas Pydantic para badges
-│   │   └── wallets.py      # WalletRegistry, CourseEnrollment (tablas SQLAlchemy)
-│   ├── services/
-│   │   ├── events_service.py   # Orquestador del flujo completo de eventos
-│   │   ├── audit_service.py    # Idempotencia y auditoría en BD
-│   │   ├── blockchain.py       # Singleton BlockchainService (web3.py + asyncio.Lock)
-│   │   ├── badges_service.py   # CRUD de skills, templates y awards
-│   │   ├── tokens_service.py   # Cálculo de MRT (fallback si coins_amount = 0)
-│   │   ├── certificate.py      # Generación de certificados PDF (ReportLab)
-│   │   └── wallet_service.py   # provision_wallet, expire_course, update_expires_at
-│   ├── workers/
-│   │   └── ipfs.py             # Simulador de pin IPFS (desarrollo)
-│   └── main.py                 # FastAPI app, lifespan, CORS, routers
-├── alembic/                    # Migraciones de base de datos
-├── tests/
-│   ├── conftest.py             # Fixtures: async DB, mock blockchain, HMAC
-│   ├── test_events.py          # Tests de /events/ingest
-│   ├── test_blockchain.py      # Tests del servicio blockchain
-│   ├── test_students.py        # Tests de /students/
-│   └── test_wallets.py         # 18 tests de wallets custodiales
-├── requirements.txt
-├── pytest.ini
-└── Dockerfile
+  ├── app/
+  │   ├── api/
+  │   │   ├── __init__.py
+  │   │   ├── events.py         # POST /events/ingest
+  │   │   ├── students.py       # GET /students/{wallet}/badges|balance|summary
+  │   │   ├── tokens.py         # POST /tokens/spend
+  │   │   ├── badges.py         # CRUD de skills, templates, awards y verificación pública
+  │   │   └── wallets.py        # POST /wallets/provision, GET, expire-course, PATCH
+  │   ├── core/
+  │   │   ├── __init__.py
+  │   │   ├── config.py         # Settings con pydantic-settings (variables de entorno)
+  │   │   ├── database.py       # AsyncSession SQLAlchemy + asyncpg
+  │   │   ├── security.py       # verify_hmac (dependency), compute_hmac
+  │   │   └── wallet_crypto.py  # Encriptación/desencriptación Fernet de claves privadas
+  │   ├── models/
+  │   │   ├── __init__.py
+  │   │   ├── events.py         # AcademicEvent, EventResponse, StudentBadge, StudentBalance
+  │   │   ├── audit.py          # EventRecord, AuditLog (tablas SQLAlchemy)
+  │   │   ├── badges.py         # BadgeTemplate, BadgeAward, Skill (tablas SQLAlchemy)
+  │   │   ├── badges_schema.py  # Schemas Pydantic para badges
+  │   │   └── wallets.py        # WalletRegistry, CourseEnrollment (tablas SQLAlchemy)
+  │   ├── services/
+  │   │   ├── __init__.py
+  │   │   ├── events_service.py   # Orquestador del flujo completo de eventos
+  │   │   ├── audit_service.py    # Idempotencia y auditoría en BD
+  │   │   ├── blockchain.py       # Singleton BlockchainService (web3.py + asyncio.Lock)
+  │   │   ├── badges_service.py   # CRUD de skills, templates y awards
+  │   │   ├── tokens_service.py   # Cálculo de MRT (fallback si coins_amount = 0)
+  │   │   ├── certificate.py      # Generación de certificados PDF (ReportLab)
+  │   │   ├── ipfs_service.py     # Cliente IPFS real (Kubo): upload_json, pin, gateway URL
+  │   │   └── wallet_service.py   # provision_wallet, expire_course, update_expires_at
+  │   ├── workers/
+  │   │   ├── __init__.py
+  │   │   └── processor.py        # Loop de reintentos de eventos fallidos (background task)
+  │   └── main.py                 # FastAPI app, lifespan, CORS, routers
+  ├── alembic/                    # Migraciones de base de datos
+  ├── tests/
+  │   ├── __init__.py
+  │   ├── conftest.py             # Fixtures: async DB, mock blockchain, HMAC
+  │   ├── test_events.py          # Tests de /events/ingest
+  │   ├── test_blockchain.py      # Tests del servicio blockchain
+  │   ├── test_curl.py            # Tests de conectividad HTTP
+  │   ├── test_e2e.py             # Tests end-to-end del flujo completo
+  │   └── test_wallets.py         # 18 tests de wallets custodiales
+  ├── requirements.txt
+  ├── pytest.ini
+  └── Dockerfile
 ```
+
+### Cambios de estructura respecto a la versión anterior
+
+| Antes | Ahora | Motivo |
+|---|---|---|
+| `workers/ipfs.py` | `workers/processor.py` | El simulador IPFS fue eliminado; el worker ahora es el loop de reintentos de eventos fallidos |
+| *(no existía)* | `services/ipfs_service.py` | Cliente HTTP real contra el nodo Kubo local |
+| `tests/test_students.py` | `tests/test_curl.py` + `tests/test_e2e.py` | Cobertura ampliada: conectividad HTTP y flujo end-to-end |
+| `__init__.py` ausentes en subcarpetas | Presentes en `api/`, `core/`, `models/`, `services/`, `workers/`, `tests/` | Consistencia de paquetes Python |
 
 ## Responsabilidad del backend
 
@@ -63,7 +81,7 @@ custodiales por semestre.
 
 ## Flujo de procesamiento de eventos
 
-```
+```text
 POST /events/ingest
         │
         ▼
@@ -97,24 +115,62 @@ audit_service.mark_event_processed() — status = "processed"
 EventResponse { event_id, status, mrt_tx, message }
 ```
 
+## IPFS — Nodo local Kubo
+
+A partir de la rama `feature/ipfs-local-node`, el servicio `ipfs_service.py`
+utiliza un **nodo Kubo real** para almacenar los metadatos Open Badges v2 de
+cada insignia. El nodo anterior era un simulador en `workers/ipfs.py` que no
+subía nada real.
+
+### Funciones expuestas por `ipfs_service.py`
+
+| Función | Descripción |
+|---|---|
+| `upload_json_to_ipfs(data: dict) → str` | Serializa el dict como JSON, lo sube al nodo con `POST /api/v0/add` y hace pin automático con `POST /api/v0/pin/add` para evitar garbage collection. Retorna el CID. |
+| `get_ipfs_gateway_url(cid: str) → str` | Construye la URL pública del gateway: `{IPFS_GATEWAY_URL}/ipfs/{cid}` |
+| `is_ipfs_available() → bool` | Comprueba si el nodo responde a `POST /api/v0/id` (útil para health checks futuros) |
+
+### Flujo de subida de metadatos de insignia
+
+```text
+badges_service crea el award
+        │
+        ▼
+ipfs_service.upload_json_to_ipfs(metadata_obv2)
+        │
+        ├─ POST {IPFS_API_URL}/api/v0/add   →  CID retornado
+        ├─ POST {IPFS_API_URL}/api/v0/pin/add?arg={CID}  →  pin fijado
+        │
+        ▼
+CID almacenado en BadgeAward.badge_uri
+URI pública verificable: {IPFS_GATEWAY_URL}/ipfs/{CID}
+        │
+        ▼
+blockchain.mint_badge(wallet, badge_id, uri)
+```
+
+El servicio Docker del nodo IPFS (nombre: `ipfs`) escucha en:
+- **API interna** (usada por el backend dentro de Docker): `http://ipfs:5001`
+- **Gateway público** (verificación de badges desde el exterior): `http://localhost:8090`
+
 ## Endpoints
 
 ### Sistema
 
 | Método | Ruta | Descripción |
-|--------|------|-------------|
+|---|---|---|
 | GET | `/health` | Estado del servicio y conexión a blockchain |
 
 ### Eventos
 
 | Método | Ruta | Auth | Descripción |
-|--------|------|------|-------------|
+|---|---|---|---|
 | POST | `/events/ingest` | HMAC | Recibe evento académico del plugin Moodle |
 
 ### Estudiantes
 
 | Método | Ruta | Descripción |
-|--------|------|-------------|
+|---|---|---|
 | GET | `/students/{wallet}/badges` | Insignias del flujo automático (audit_log) |
 | GET | `/students/{wallet}/balance` | Saldo MRT desde blockchain |
 | GET | `/students/{wallet}/summary` | Balance + badges para dashboard Moodle |
@@ -122,13 +178,13 @@ EventResponse { event_id, status, mrt_tx, message }
 ### Tokens
 
 | Método | Ruta | Descripción |
-|--------|------|-------------|
+|---|---|---|
 | POST | `/tokens/spend` | Quema MRT al canjear en marketplace |
 
 ### Insignias (sistema manual)
 
 | Método | Ruta | Descripción |
-|--------|------|-------------|
+|---|---|---|
 | GET | `/skills` | Listar skills |
 | POST | `/skills` | Crear skill |
 | POST | `/badges/templates` | Crear plantilla de insignia |
@@ -136,7 +192,7 @@ EventResponse { event_id, status, mrt_tx, message }
 | GET | `/badges/templates/{id}` | Obtener plantilla |
 | PATCH | `/badges/templates/{id}` | Actualizar plantilla |
 | DELETE | `/badges/templates/{id}` | Eliminar plantilla (soft-delete si tiene awards) |
-| POST | `/badges/award` | Otorgar insignia a estudiante |
+| POST | `/badges/award` | Otorgar insignia a estudiante (metadatos subidos a IPFS automáticamente) |
 | GET | `/badges/student/{student_id}` | Insignias de un estudiante |
 | DELETE | `/badges/award/{award_id}` | Revocar insignia |
 | GET | `/verify/{award_id}` | Verificación pública (sin auth) |
@@ -145,7 +201,7 @@ EventResponse { event_id, status, mrt_tx, message }
 ### Wallets custodiales
 
 | Método | Ruta | Descripción |
-|--------|------|-------------|
+|---|---|---|
 | POST | `/wallets/provision` | Genera wallet custodial para un estudiante en un curso piloto. Reutiliza la wallet si ya existe; reactiva el enrollment si estaba expirado (rematrícula). |
 | GET | `/wallets/{student_id}` | Retorna la dirección de la wallet. **Nunca expone la clave privada.** |
 | POST | `/wallets/expire-course` | Cierra todos los enrollments activos de un curso. Guarda snapshot de MRT. Llamado automáticamente por `expire_courses_task`. |
@@ -153,7 +209,7 @@ EventResponse { event_id, status, mrt_tx, message }
 
 ### Documentación interactiva
 
-```
+```text
 http://localhost:8000/docs      # Swagger UI
 http://localhost:8000/redoc     # ReDoc
 ```
@@ -183,6 +239,12 @@ PUBLIC_BASE_URL=http://localhost:8000
 # ⚠️ OBLIGATORIO para el sistema de wallets — sin esto el backend no arranca
 WALLET_ENCRYPTION_KEY=<clave-fernet-de-32-bytes-base64>
 
+# IPFS — nodo Kubo local (añadido en feature/ipfs-local-node)
+# Dentro de Docker el host es el nombre del servicio "ipfs"
+IPFS_API_URL=http://ipfs:5001
+# Puerto del gateway público (mapeado en docker-compose.yml)
+IPFS_GATEWAY_URL=http://localhost:8090
+
 # Debug
 DEBUG=true
 ```
@@ -197,6 +259,11 @@ DEBUG=true
   al arrancar — es obligatoria para el sistema de wallets custodiales.
 - Si Besu no está disponible al arrancar, el servicio inicia igual;
   el health check refleja el estado real de conexión.
+- Si `IPFS_API_URL` no apunta a un nodo activo, el otorgamiento de badges
+  (`POST /badges/award`) fallará al intentar subir los metadatos. En
+  desarrollo, levantar el servicio `ipfs` del Compose antes de operar badges.
+- Para desarrollo local fuera de Docker, usar `http://localhost:5001` como
+  `IPFS_API_URL` e iniciar Kubo manualmente (`ipfs daemon`).
 
 ## Instalación y ejecución
 
@@ -216,7 +283,7 @@ cd backend
 # Crear entorno virtual
 python -m venv .venv
 source .venv/bin/activate        # Linux/Mac
-.venv\Scripts\activate           # Windows
+.venv\\Scripts\\activate           # Windows
 
 # Instalar dependencias
 pip install -r requirements.txt
@@ -237,7 +304,7 @@ docker compose exec backend pytest tests/ -v --tb=short
 python -m pytest tests/ -v --tb=short
 ```
 
-El suite de tests (41 en total) cubre:
+El suite de tests cubre:
 
 **Eventos:**
 - Ingesta válida de eventos con HMAC correcto
@@ -250,8 +317,11 @@ El suite de tests (41 en total) cubre:
 - Mint, burn y consulta de balance
 - Manejo de errores de blockchain (Besu no disponible)
 
-**Estudiantes:**
-- Consulta de balance, badges y summary
+**Conectividad HTTP (`test_curl.py`):**
+- Verificación de que los endpoints del servidor responden correctamente
+
+**End-to-end (`test_e2e.py`):**
+- Flujo completo: evento → mint → auditoría → consulta de balance
 
 **Wallets custodiales (18 tests):**
 - Provisionado de wallet nueva (`created=True`)
@@ -292,15 +362,18 @@ timing attacks. Si la firma no coincide retorna HTTP 401.
 
 La idempotencia se garantiza a nivel de `event_id`:
 
-1. Antes de cualquier mint, se inserta el `event_id` en `EventRecord` con `status = "processing"`.
-2. Si el insert falla por `IntegrityError` (clave duplicada), el evento se rechaza con `status = "duplicate"` sin reintentar el mint.
-3. Si el mint falla, se hace rollback completo y `mark_event_failed` abre una sesión independiente para registrar el error.
+1. Antes de cualquier mint, se inserta el `event_id` en `EventRecord` con
+   `status = "processing"`.
+2. Si el insert falla por `IntegrityError` (clave duplicada), el evento se
+   rechaza con `status = "duplicate"` sin reintentar el mint.
+3. Si el mint falla, se hace rollback completo y `mark_event_failed` abre
+   una sesión independiente para registrar el error.
 
 ## Wallets custodiales — detalle técnico
 
 ### Modelo de datos
 
-```
+```text
 wallet_registry (una fila por estudiante)
   student_id       TEXT  PRIMARY KEY  -- "STU-{moodle_userid}"
   wallet_address   TEXT  UNIQUE       -- "0x..."
@@ -321,7 +394,8 @@ course_enrollment (una fila por estudiante × curso × semestre)
 
 Cuando un estudiante se rematricula en un curso ya expirado:
 - La wallet **permanece igual** (no se genera una nueva).
-- Se crea un enrollment nuevo con `status=active`, `mrt_snapshot=0` y `expired_at=None`.
+- Se crea un enrollment nuevo con `status=active`, `mrt_snapshot=0` y
+  `expired_at=None`.
 - Los badges del semestre anterior se conservan en blockchain.
 
 ### Encriptación de claves privadas
@@ -343,20 +417,46 @@ decrypted = fernet.decrypt(encrypted.encode()).decode()
 serializa todas las transacciones del deployer. Esto evita el problema de
 nonce duplicado cuando llegan dos requests simultáneos.
 
+El método `_send_tx` implementa además reintentos con backoff exponencial:
+
+| Parámetro | Valor |
+|---|---|
+| Máximo de reintentos | 3 |
+| Delay base | 2 segundos |
+| Factor de backoff | × 2 por intento |
+| Timeout de receipt | 120 segundos |
+| Gas fallback | 500 000 |
+
+## Workers
+
+### `workers/processor.py` — Loop de reintentos
+
+Tarea de fondo lanzada en el `lifespan` del servidor mediante
+`asyncio.create_task(retry_loop())`. Reintenta periódicamente los eventos
+con `status = failed`, garantizando que ningún evento se pierda por errores
+transitorios de red o blockchain.
+
+> En versiones anteriores existía `workers/ipfs.py` como simulador de IPFS
+> que no subía nada real. En esta rama fue eliminado y reemplazado por:
+> - `services/ipfs_service.py` → cliente HTTP real contra Kubo
+> - `workers/processor.py` → loop de reintentos de eventos
+
 ## Dependencias principales
 
 | Paquete | Versión | Uso |
-|---------|---------|-----|
-| fastapi | ≥0.111 | Framework web asíncrono |
-| uvicorn | ≥0.29 | Servidor ASGI |
-| pydantic / pydantic-settings | ≥2.0 | Validación y configuración |
-| sqlalchemy[asyncio] + asyncpg | ≥2.0 | Base de datos async |
-| alembic | ≥1.13 | Migraciones de BD |
-| web3 | ≥6.0 | Interacción con contratos EVM |
-| eth-account | ≥0.10 | Generación de wallets Ethereum |
-| cryptography | ≥42.0 | Encriptación Fernet de claves privadas |
-| reportlab | ≥4.0 | Generación de certificados PDF |
-| pytest + pytest-asyncio + httpx | — | Testing |
+|---|---|---|
+| `fastapi` | ≥0.115 | Framework web asíncrono |
+| `uvicorn[standard]` | ≥0.30 | Servidor ASGI |
+| `pydantic` / `pydantic-settings` | ≥2.9 / ≥2.5 | Validación y configuración |
+| `sqlalchemy[asyncio]` + `asyncpg` | ≥2.0 / ≥0.29 | Base de datos async |
+| `alembic` | ≥1.13 | Migraciones de BD |
+| `web3` | ≥7.0 | Interacción con contratos EVM |
+| `eth-account` | ≥0.10 | Generación de wallets Ethereum |
+| `cryptography` | ≥42.0 | Encriptación Fernet de claves privadas |
+| `reportlab` | ≥4.0 | Generación de certificados PDF |
+| `httpx` | ≥0.27 | Cliente HTTP async (usado por `ipfs_service.py`) |
+| `aiosqlite` | ≥0.20 | BD en memoria para tests |
+| `pytest` + `pytest-asyncio` | ≥8.0 / ≥0.24 | Testing |
 
 ## Ejemplos de uso
 
@@ -446,6 +546,7 @@ El backend se encarga de:
 - Validar autenticidad del evento (HMAC)
 - Garantizar idempotencia a nivel de `event_id`
 - Acuñar MRT en Besu (o registrar sin mint si no hay wallet)
+- Subir metadatos OBv2 de insignias a IPFS (nodo Kubo) y obtener el CID
 - Gestionar el ciclo de vida completo de wallets custodiales
 - Exponer saldo y badges para el dashboard del estudiante
 - Quemar MRT cuando el marketplace ejecuta un canje confirmado
