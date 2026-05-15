@@ -169,9 +169,10 @@ no encontrará los contratos o el plugin no conectará con el backend.
 Levantar red Besu
 Clonar y configurar .env
 Levantar servicios Docker principales
-Desplegar contratos en Besu
+Desplegar contratos en Besu y otorgar roles al signer del backend
 Actualizar .env del backend con las direcciones
 Recrear el backend
+Aplicar migraciones de base de datos
 Instalar y configurar el plugin en Moodle
 ```
 ---
@@ -210,6 +211,16 @@ curl -s http://localhost:8545 \
 > Si el resultado es `"0x0"` espera 10 segundos y repite. La red tarda unos
 > segundos en producir el primer bloque después del arranque.
 
+> ⚠️ **Si los nodos Besu se caen** (se ve `Exited` en `docker ps`), cualquier
+> transacción en vuelo se pierde aunque el `tx_hash` haya quedado guardado en
+> la BD. Después de recuperarlos deberás marcar los eventos como `failed` para
+> que el worker reintente el mint:
+> ```bash
+> docker exec meritcoin-postgres psql -U meritcoin -d meritcoin_db \
+>   -c "UPDATE events SET status='failed' WHERE status='processed' \
+>       AND event_id IN (SELECT event_id FROM audit_log WHERE tx_mrt IS NOT NULL);"
+> ```
+
 Vuelve a la raíz del proyecto:
 
 ```bash
@@ -226,23 +237,30 @@ cd meritcoin
 cp .env.example .env
 ```
 
-Edita `.env` y ajusta **obligatoriamente** estos tres valores:
+Edita `.env` y ajusta **obligatoriamente** estos valores:
 
 ```env
 # Genera la clave Fernet ejecutando este comando:
-# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 WALLET_ENCRYPTION_KEY=tu-clave-fernet-aqui   # ⚠️ el backend no arranca sin esto
 
 HMAC_SECRET=cambia-este-secreto              # cualquier string largo y aleatorio
 
+# Clave privada de la cuenta deployer (cuenta #0 del génesis de Besu)
+# Esta cuenta también actúa como SIGNER del backend para firmar transacciones.
+# Solo para desarrollo local. Nunca uses esta clave en producción.
 DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-# ↑ Esta es la clave de la cuenta #0 preconfigurada en el génesis de Besu.
-#   Solo para desarrollo local. Nunca uses esta clave en producción.
+BACKEND_SIGNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
 > `WALLET_ENCRYPTION_KEY` cifra las claves privadas de las wallets custodiales
 > de los estudiantes con Fernet (AES-128-CBC). Sin esta variable el backend
 > se niega a iniciar.
+
+> ⚠️ **Importante:** la cuenta cuya clave privada uses en `BACKEND_SIGNER_PRIVATE_KEY`
+> **debe tener `MINTER_ROLE` y `BURNER_ROLE`** en los contratos ERC-20 y ERC-1155.
+> Esto se otorga en el Paso 3. Si usas cuentas distintas para deployer y signer,
+> asegúrate de otorgar los roles explícitamente a la dirección del signer.
 
 ---
 
@@ -287,7 +305,7 @@ pnpm exec hardhat test
 # Resultado esperado: 19 passing
 ```
 
-Despliega los contratos en la red Besu (el nodo 1 debe estar corriendo en el paso 0):
+Despliega los contratos en la red Besu (el nodo 1 debe estar corriendo desde el paso 0):
 
 ```bash
 pnpm exec hardhat run scripts/deploy.js --network besu
@@ -306,6 +324,34 @@ ISSUER_ROLE granted to deployer ✓
 
 **Copia las dos direcciones** — las necesitas en el siguiente paso.
 
+> ⚠️ **Nunca corras `deploy.js` más de una vez** sin actualizar el `.env` del backend.
+> Cada ejecución despliega contratos **nuevos** en direcciones distintas. Si el backend
+> apunta a contratos viejos, todas las transacciones serán revertidas silenciosamente
+> con `status: 0x0` y el balance quedará en 0.
+
+> ⚠️ **MINTER_ROLE y el signer del backend:** el script `deploy.js` otorga los roles
+> a la cuenta deployer. Si la cuenta que firma las transacciones en el backend
+> (`BACKEND_SIGNER_PRIVATE_KEY`) es **diferente** a la cuenta deployer, debes
+> otorgarle los roles explícitamente. Agrega esto al final de `deploy.js`:
+> ```js
+> const BACKEND_SIGNER = "0xDIRECCION_DEL_SIGNER";
+> const MINTER_ROLE = await token.MINTER_ROLE();
+> await token.grantRole(MINTER_ROLE, BACKEND_SIGNER);
+> const BURNER_ROLE = await token.BURNER_ROLE();
+> await token.grantRole(BURNER_ROLE, BACKEND_SIGNER);
+> const ISSUER_ROLE = await badges.ISSUER_ROLE();
+> await badges.grantRole(ISSUER_ROLE, BACKEND_SIGNER);
+> console.log(`Roles otorgados al signer del backend: ${BACKEND_SIGNER}`);
+> ```
+> Para verificar que el signer tiene el rol después del deploy:
+> ```bash
+> curl -s -X POST http://localhost:8545 \
+>   -H "Content-Type: application/json" \
+>   -d '{"jsonrpc":"2.0","method":"eth_call","params":[{"to":"<MRT_ADDRESS>",
+>   "data":"0x91d148540000000000000000000000009f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6000000000000000000000000<SIGNER_ADDRESS_SIN_0x>"},"latest"],"id":1}'
+> # Resultado esperado: 0x0000...0001 (true = tiene el rol)
+> ```
+
 Vuelve a la raíz:
 
 ```bash
@@ -316,7 +362,7 @@ cd ..
 
 ### Paso 4 — Actualizar el backend con las direcciones de los contratos
 
-Abre `backend/.env` (o el `.env` raíz si usa el mismo archivo) y añade/reemplaza:
+Abre `.env` y añade/reemplaza:
 
 ```env
 MRT_CONTRACT_ADDRESS=0xABC123...       # dirección ERC-20 del paso anterior
@@ -367,9 +413,52 @@ estén corriendo y que `BLOCKCHAIN_RPC_URL` apunte a `host.docker.internal:8545`
 
 ---
 
-### Paso 6 — Instalar el plugin en Moodle
+### Paso 6 — Aplicar migraciones de base de datos
 
-#### 6.1 Montar el volumen del plugin
+> ⚠️ **Paso crítico que se omite fácilmente.** Si el backend se levanta con
+> `create_all` (modo desarrollo) y luego se agregan columnas al modelo sin
+> migrar, esas columnas no existirán en la BD real aunque el ORM las tenga
+> definidas. El síntoma es que `ipfs_cid`, `tx_hash` y `chain_status` quedan
+> en `NULL` después de otorgar insignias.
+
+Verifica el estado actual de las migraciones:
+
+```bash
+docker exec -it meritcoin-backend alembic current
+```
+
+Si no muestra ninguna revisión (salida vacía), la BD fue creada con `create_all`
+sin pasar por Alembic. Márcala como sincronizada sin ejecutar migraciones:
+
+```bash
+docker exec -it meritcoin-backend alembic stamp head
+```
+
+Aplica cualquier migración pendiente:
+
+```bash
+docker exec -it meritcoin-backend alembic upgrade head
+```
+
+Si hay columnas nuevas en el modelo que no tienen migración, genera una:
+
+```bash
+docker exec -it meritcoin-backend alembic revision --autogenerate -m "descripcion de los cambios"
+docker exec -it meritcoin-backend alembic upgrade head
+```
+
+Verifica que las columnas críticas existen en `badge_awards`:
+
+```bash
+docker exec -it meritcoin-postgres psql -U meritcoin -d meritcoin_db -c "\d badge_awards"
+# Debe incluir: tx_hash, ipfs_cid, chain_status
+```
+
+---
+
+### Paso 7 — Instalar el plugin en Moodle
+
+#### 7.1 Montar el volumen del plugin
 
 Abre `docker-compose.yml` y **descomenta** esta línea bajo el servicio `moodle`:
 
@@ -395,14 +484,14 @@ docker exec meritcoin-moodle ls /bitnami/moodle/local/meritcoin
 # Debe listar: classes  db  lang  styles  dashboard.php  lib.php  version.php ...
 ```
 
-#### 6.2 Instalar el plugin desde el panel de Moodle
+#### 7.2 Instalar el plugin desde el panel de Moodle
 
 1. Entra a http://localhost:8080 como **admin** (contraseña: `Admin1234!`)
 2. Moodle detecta el plugin automáticamente. Ve a:
    **Administración del sitio → Notificaciones**
 3. Haz clic en **Actualizar base de datos de Moodle** y completa el proceso.
 
-#### 6.3 Configurar el plugin
+#### 7.3 Configurar el plugin
 
 Ve a: **Administración del sitio → Plugins → Plugins locales → MeritCoin**
 
@@ -418,7 +507,7 @@ Ve a: **Administración del sitio → Plugins → Plugins locales → MeritCoin*
 > **ambos** contenedores (Moodle y backend) están en el mismo Docker Compose.
 > Usa `http://host.docker.internal:8000` solo si corres el backend fuera de Docker.
 
-#### 6.4 Crear el campo de perfil de wallet (para cursos no piloto)
+#### 7.4 Crear el campo de perfil de wallet (para cursos no piloto)
 
 1. **Administración del sitio → Usuarios → Campos de perfil de usuario**
 2. Agrega un campo de tipo **Entrada de texto**:
@@ -532,7 +621,14 @@ Desde la API del backend:
 
 ```bash
 # Reemplaza <WALLET> con la dirección del estudiante
-curl -s http://localhost:8000/students/<WALLET>/summary | python -m json.tool
+curl -s http://localhost:8000/students/<WALLET>/summary | python3 -m json.tool
+```
+
+Verifica también en la BD que el CID e tx_hash se guardaron:
+
+```bash
+docker exec -it meritcoin-postgres psql -U meritcoin -d meritcoin_db \
+  -c "SELECT id, chain_status, tx_hash, ipfs_cid FROM badge_awards ORDER BY issued_at DESC LIMIT 5;"
 ```
 
 Desde Moodle: entra como el estudiante y ve a **MeritCoin → Mi Dashboard**.
@@ -628,6 +724,80 @@ cd ../..
 
 > Después de reiniciar Besu debes re-desplegar los contratos, ya que las
 > direcciones anteriores dejarán de existir en la nueva cadena.
+> También debes aplicar nuevamente las migraciones de Alembic si la BD
+> de PostgreSQL fue recreada.
+
+---
+
+## Diagnóstico y solución de problemas frecuentes
+
+### El balance del estudiante muestra 0
+
+1. Verifica que la transacción de mint no fue revertida:
+   ```bash
+   curl -s -X POST http://localhost:8545 \
+     -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","method":"eth_getTransactionReceipt","params":["<TX_HASH>"],"id":1}'
+   # Si "status": "0x0" → la transacción fue revertida
+   ```
+2. Si fue revertida, verifica que el signer tiene `MINTER_ROLE` (ver Paso 3).
+3. Si el receipt devuelve `null`, los nodos Besu se cayeron antes de incluir el bloque.
+   Marca el evento como `failed` para reintento:
+   ```bash
+   docker exec -it meritcoin-postgres psql -U meritcoin -d meritcoin_db \
+     -c "UPDATE events SET status='failed' WHERE event_id='<EVENT_ID>';
+         DELETE FROM audit_log WHERE event_id='<EVENT_ID>';"
+   ```
+
+### `ipfs_cid` y `tx_hash` son NULL en `badge_awards`
+
+1. Verifica que las columnas existen en la tabla:
+   ```bash
+   docker exec -it meritcoin-postgres psql -U meritcoin -d meritcoin_db -c "\d badge_awards"
+   ```
+   Si no existen, aplica las migraciones (ver Paso 6).
+
+2. Verifica que IPFS es accesible desde el backend:
+   ```bash
+   docker exec -it meritcoin-backend curl -s -X POST http://meritcoin-ipfs:5001/api/v0/id
+   # Debe devolver el ID del nodo IPFS
+   ```
+
+3. Revisa los logs del backend mientras otorgas una insignia:
+   ```bash
+   docker logs meritcoin-backend --tail=50 -f
+   ```
+
+### `alembic current` no muestra ninguna revisión
+
+La BD fue creada con `create_all` en lugar de migraciones. Sincroniza sin ejecutar:
+
+```bash
+docker exec -it meritcoin-backend alembic stamp head
+docker exec -it meritcoin-backend alembic current
+# Debe mostrar la revisión más reciente como (head)
+```
+
+### Error `DuplicateColumnError` al correr `alembic upgrade head`
+
+La BD tiene columnas que Alembic no sabe que ya aplicó. Solución: usar `stamp head` primero (ver punto anterior).
+
+### `host.docker.internal` no resuelve en Linux
+
+Agrega `extra_hosts` al servicio `backend` en `docker-compose.yml`:
+
+```yaml
+services:
+  backend:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+```
+
+Luego recrea el contenedor:
+
+```bash
+docker compose up -d --force-recreate backend
+```
 
 ---
 
@@ -645,6 +815,8 @@ Documentación interactiva disponible en http://localhost:8000/docs
 | `POST` | `/tokens/spend` | Quemar MRT al confirmar un canje del marketplace |
 | `POST` | `/wallets/provision` | Provisionar wallet custodial para un estudiante |
 | `POST` | `/wallets/expire-course` | Congelar saldo al cerrar un curso piloto |
+| `POST` | `/badges/award` | Otorgar insignia manualmente a un estudiante |
+| `POST` | `/badges/awards/{id}/retry-chain` | Reintentar mint en blockchain de una insignia pendiente |
 
 ---
 
@@ -717,7 +889,7 @@ Ver documentación detallada en [`contracts/README.md`](./contracts/README.md).
 | 8 | Dashboard del estudiante + Mercado de recompensas | ✅ Completa |
 | 9 | Insignias personalizadas (imagen, nombre y descripción configurables por curso) | ✅ Completa |
 | 10 | Integración Hyperledger Besu (red privada QBFT, 4 nodos) | ✅ Completa |
-| 11 | Finalizacion del MVP | ✅ Completa |
+| 11 | Finalización del MVP | ✅ Completa |
 
 ---
 
