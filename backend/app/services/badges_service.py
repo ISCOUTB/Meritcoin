@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.models.audit import EventRecord
+from app.models.wallets import WalletRegistry
 from app.models.badges import BadgeAward, BadgeTemplate, Skill
 from app.models.badges_schema import (
     BadgeAwardCreate,
@@ -106,10 +107,13 @@ async def _assert_teacher_can_award(
     esta verificación puede producir falsos 403.
     TODO: validar consistencia de formato de student_id entre plugin y API.
     """
+    student_id_normalized = student_id if student_id.startswith("STU-") else f"STU-{student_id}"
+    course_id_normalized = course_id if course_id.startswith("COURSE-") else f"COURSE-{course_id}"
+
     query = (
         select(EventRecord)
-        .where(EventRecord.student_id == student_id)
-        .where(EventRecord.course_id == course_id)
+        .where(EventRecord.student_id == student_id_normalized)
+        .where(EventRecord.course_id == course_id_normalized)
     )
     result = await db.execute(query)
     if not result.scalars().first():
@@ -343,6 +347,18 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
 
     tx_hash: Optional[str] = None
     chain_status = "pending"
+
+    # ── Auto-lookup wallet si no fue proporcionado ─────────────────────────
+    if not data.student_wallet:
+        wallet_row = await db.scalar(
+            select(WalletRegistry.wallet_address)
+            .where(WalletRegistry.student_id == data.student_id)
+        )
+        if wallet_row:
+            data.student_wallet = wallet_row
+            logger.info("Wallet auto-resuelto para %s: %s", data.student_id, wallet_row)
+        else:
+            logger.warning("No hay wallet registrado para student_id=%s", data.student_id)
 
     if data.student_wallet and blockchain.is_connected():
         # ── Mint badge ────────────────────────────────────────────────────────

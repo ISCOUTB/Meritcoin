@@ -127,5 +127,5 @@ class PublicVerifyResponse(BaseModel):
     tx_hash:           Optional[str]
     revoked:           bool
     revoked_at:        Optional[datetime]
-    ipfs_cid:  Optional[str] = None
-    ipfs_url:  Optional[str] = None
+    ipfs_cid:          Optional[str] = None
+    ipfs_url:          Optional[str] = None
