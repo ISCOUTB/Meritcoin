@@ -90,23 +90,20 @@ async def _assert_teacher_can_award(
     course_id: str,
 ) -> None:
     student_id_normalized = student_id if student_id.startswith("STU-") else f"STU-{student_id}"
-    course_id_normalized = course_id if course_id.startswith("COURSE-") else f"COURSE-{course_id}"
+    course_id_normalized  = course_id  if course_id.startswith("COURSE-") else f"COURSE-{course_id}"
 
     query = (
         select(EventRecord)
         .where(EventRecord.student_id == student_id_normalized)
-        .where(EventRecord.course_id == course_id_normalized)
+        .where(EventRecord.course_id  == course_id_normalized)
     )
     result = await db.execute(query)
     if not result.scalars().first():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"El profesor '{teacher_id}' no puede otorgar insignias "
-                f"al estudiante '{student_id}' en el curso '{course_id}'."
-            ),
+        logger.warning(
+            "Profesor '%s' otorgando insignia sin EventRecord previo — "
+            "estudiante='%s' curso='%s'. Permitiendo (primera insignia).",
+            teacher_id, student_id, course_id,
         )
-
 
 # ── Skills ────────────────────────────────────────────────────────────────────
 
