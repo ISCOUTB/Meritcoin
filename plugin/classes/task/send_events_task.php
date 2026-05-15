@@ -168,8 +168,8 @@ class send_events_task extends \core\task\scheduled_task {
         $fieldid = $DB->get_field('user_info_field', 'id', ['shortname' => $walletfield]);
 
         if (!$fieldid) {
-            mtrace("MeritCoin: Wallet profile field '{$walletfield}' not found.");
-            return;
+            mtrace("MeritCoin: Wallet profile field '{$walletfield}' not found, will use custodial cache only.");
+            // no return — continuamos buscando en la caché custodial
         }
 
         $records = $DB->get_records_select(
@@ -187,10 +187,19 @@ class send_events_task extends \core\task\scheduled_task {
         }
 
         foreach ($records as $record) {
+            // DESPUÉS — busca perfil primero, luego caché custodial
             $wallet = $DB->get_field('user_info_data', 'data', [
-                'userid' => $record->userid,
+                'userid'  => $record->userid,
                 'fieldid' => $fieldid,
             ]);
+
+            // Fallback: wallet custodial provisionada por el backend
+            if (empty($wallet) || !preg_match('/^0x[0-9a-fA-F]{40}$/', $wallet)) {
+                $wallet = $DB->get_field('local_meritcoin_wallets', 'wallet_address', [
+                    'userid' => $record->userid,
+                    'status' => 'active',
+                ]);
+            }
 
             if (empty($wallet) || !preg_match('/^0x[0-9a-fA-F]{40}$/', $wallet)) {
                 continue;

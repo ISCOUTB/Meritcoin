@@ -56,7 +56,14 @@ async def _process_pending(db, pending: PendingTransaction) -> bool:
         if pending.tx_type == "mint_mrt":
             await blockchain.mint_mrt(pending.wallet, pending.amount)
         elif pending.tx_type == "mint_badge":
-            await blockchain.mint_badge(pending.wallet, int(pending.badge_id), pending.uri)
+            tx_hash = await blockchain.mint_badge(pending.wallet, int(pending.badge_id), pending.uri)
+            # ── Actualizar badge_award con el tx_hash confirmado ──────────────
+            from app.models.badges import BadgeAward
+            award = await db.get(BadgeAward, pending.event_id)
+            if award:
+                award.tx_hash = tx_hash
+                award.chain_status = "confirmed"
+            # ─────────────────────────────────────────────────────────────────
         elif pending.tx_type == "burn_mrt":
             await blockchain.burn_mrt(pending.wallet, pending.amount)
         else:

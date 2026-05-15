@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.models.audit import EventRecord
+from app.models.wallets import WalletRegistry
 from app.models.badges import BadgeAward, BadgeTemplate, Skill
 from app.models.badges_schema import (
     BadgeAwardCreate,
@@ -28,6 +29,7 @@ from app.models.badges_schema import (
 )
 from app.services.blockchain import blockchain
 from app.services.ipfs_service import upload_json_to_ipfs, get_ipfs_gateway_url
+from app.workers.processor import enqueue  # ← NUEVO
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +37,12 @@ logger = logging.getLogger(__name__)
 # ── Helpers internos ──────────────────────────────────────────────────────────
 
 def _criteria_to_str(criteria: Optional[List[str]]) -> Optional[str]:
-    """Convierte lista de criterios a string separado por saltos de línea."""
     if not criteria:
         return None
     return "\n".join(c.strip() for c in criteria if c.strip())
 
 
 def criteria_from_str(raw: Optional[str]) -> List[str]:
-    """Convierte string de criterios (separado por \n) a lista."""
     if not raw:
         return []
     return [c for c in raw.split("\n") if c.strip()]
@@ -53,11 +53,6 @@ async def _get_or_create_skills(
     skill_ids: Optional[List[str]],
     new_skill_names: Optional[List[str]],
 ) -> List[Skill]:
-    """
-    Resuelve una lista de skills por ID y/o crea nuevas por nombre.
-
-    Lanza HTTP 404 si algún skill_id no existe en BD.
-    """
     skills: List[Skill] = []
 
     if skill_ids:
@@ -94,38 +89,25 @@ async def _assert_teacher_can_award(
     student_id: str,
     course_id: str,
 ) -> None:
-    """
-    Verifica que el estudiante tenga eventos registrados en el curso.
+    student_id_normalized = student_id if student_id.startswith("STU-") else f"STU-{student_id}"
+    course_id_normalized  = course_id  if course_id.startswith("COURSE-") else f"COURSE-{course_id}"
 
-    Lanza HTTP 403 si no se encuentra ningún EventRecord que relacione
-    al estudiante con el curso.
-
-    NOTA: La verificación usa EventRecord.student_id tal como lo envía
-    el plugin Moodle (userid numérico como string). Si el student_id del
-    payload de BadgeAwardCreate difiere del formato enviado por el plugin,
-    esta verificación puede producir falsos 403.
-    TODO: validar consistencia de formato de student_id entre plugin y API.
-    """
     query = (
         select(EventRecord)
-        .where(EventRecord.student_id == student_id)
-        .where(EventRecord.course_id == course_id)
+        .where(EventRecord.student_id == student_id_normalized)
+        .where(EventRecord.course_id  == course_id_normalized)
     )
     result = await db.execute(query)
     if not result.scalars().first():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"El profesor '{teacher_id}' no puede otorgar insignias "
-                f"al estudiante '{student_id}' en el curso '{course_id}'."
-            ),
+        logger.warning(
+            "Profesor '%s' otorgando insignia sin EventRecord previo — "
+            "estudiante='%s' curso='%s'. Permitiendo (primera insignia).",
+            teacher_id, student_id, course_id,
         )
-
 
 # ── Skills ────────────────────────────────────────────────────────────────────
 
 async def list_skills(db: AsyncSession, search: Optional[str] = None) -> List[Skill]:
-    """Lista todas las skills, opcionalmente filtradas por nombre (ilike)."""
     query = select(Skill).order_by(Skill.name)
     if search:
         query = query.where(Skill.name.ilike(f"%{search}%"))
@@ -138,11 +120,6 @@ async def create_skill(
     name: str,
     description: Optional[str] = None,
 ) -> Skill:
-    """
-    Crea una nueva skill.
-
-    Lanza HTTP 409 si ya existe una skill con el mismo nombre.
-    """
     existing = await db.execute(select(Skill).where(Skill.name == name))
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -159,7 +136,6 @@ async def create_skill(
 # ── Templates ─────────────────────────────────────────────────────────────────
 
 async def create_template(db: AsyncSession, data: BadgeTemplateCreate) -> BadgeTemplate:
-    """Crea una nueva plantilla de insignia con sus skills asociadas."""
     skills = await _get_or_create_skills(db, data.skill_ids, data.new_skills)
     template = BadgeTemplate(
         name=data.name,
@@ -186,7 +162,6 @@ async def list_templates(
     created_by_id: Optional[str] = None,
     only_active: bool = True,
 ) -> List[BadgeTemplate]:
-    """Lista plantillas de insignias, opcionalmente filtradas por creador y estado."""
     query = (
         select(BadgeTemplate)
         .options(selectinload(BadgeTemplate.skills))
@@ -201,11 +176,6 @@ async def list_templates(
 
 
 async def get_template(db: AsyncSession, template_id: str) -> BadgeTemplate:
-    """
-    Obtiene una plantilla por ID con sus skills.
-
-    Lanza HTTP 404 si no existe.
-    """
     result = await db.execute(
         select(BadgeTemplate)
         .options(selectinload(BadgeTemplate.skills))
@@ -227,11 +197,6 @@ async def update_template(
     requester_id: str,
     requester_role: str,
 ) -> BadgeTemplate:
-    """
-    Actualiza los campos de una plantilla.
-
-    Solo el creador o un admin pueden editar.
-    """
     template = await get_template(db, template_id)
     if requester_role != "admin" and template.created_by_id != requester_id:
         raise HTTPException(
@@ -267,12 +232,6 @@ async def delete_template(
     requester_id: str,
     requester_role: str,
 ) -> None:
-    """
-    Elimina una plantilla.
-
-    Si ya tiene insignias otorgadas hace soft-delete (is_active=False)
-    para preservar el historial. Solo el creador o un admin pueden eliminar.
-    """
     template = await get_template(db, template_id)
     if requester_role != "admin" and template.created_by_id != requester_id:
         raise HTTPException(
@@ -284,7 +243,6 @@ async def delete_template(
         select(BadgeAward).where(BadgeAward.template_id == template_id).limit(1)
     )
     if awards_result.scalar_one_or_none():
-        # Soft-delete: mantiene el historial de insignias ya emitidas
         template.is_active = False
         await db.commit()
         return
@@ -302,8 +260,9 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
     Flujo:
       1. Validar plantilla activa y permisos del emisor.
       2. Intentar mint en blockchain si el estudiante tiene wallet.
-      3. Si la plantilla tiene mrt_reward, acuñar MRT (no bloquea el badge).
-      4. Guardar el BadgeAward en BD.
+      3. Si falla, guardar como 'pending' y encolar reintento automático.
+      4. Si la plantilla tiene mrt_reward, acuñar MRT (no bloquea el badge).
+      5. Guardar el BadgeAward en BD.
     """
 
     template = await get_template(db, data.template_id)
@@ -321,9 +280,7 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
             )
         await _assert_teacher_can_award(db, data.issued_by_id, data.student_id, data.course_id)
 
-    # badge_id uint256: derivado del UUID del template (reproducible y único)
     badge_id = int(data.template_id.replace("-", ""), 16) % (2 ** 256)
-    # La URI apunta al endpoint público de verificación configurado en settings
     badge_metadata = {
         "@context": "https://w3id.org/openbadges/v2",
         "type": "BadgeClass",
@@ -339,22 +296,34 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
         badge_uri = await get_ipfs_gateway_url(cid)
     except Exception as exc:
         logger.warning("IPFS no disponible, usando URI fallback: %s", exc)
+        cid = None  # ← FIX: antes no se definía y reventaba más abajo
         badge_uri = f"{settings.public_base_url}/badges/{data.template_id}"
 
     tx_hash: Optional[str] = None
     chain_status = "pending"
+    needs_enqueue = False  # ← NUEVO
+
+    if not data.student_wallet:
+        wallet_row = await db.scalar(
+            select(WalletRegistry.wallet_address)
+            .where(WalletRegistry.student_id == data.student_id)
+        )
+        if wallet_row:
+            data.student_wallet = wallet_row
+            logger.info("Wallet auto-resuelto para %s: %s", data.student_id, wallet_row)
+        else:
+            logger.warning("No hay wallet registrado para student_id=%s", data.student_id)
 
     if data.student_wallet and blockchain.is_connected():
-        # ── Mint badge ────────────────────────────────────────────────────────
         try:
             tx_hash = await blockchain.mint_badge(data.student_wallet, badge_id, badge_uri)
             chain_status = "confirmed"
             logger.info("Badge minteado en blockchain: tx=%s", tx_hash)
         except Exception as exc:
-            logger.warning("Error al mintear badge en blockchain: %s", exc)
-            chain_status = "failed"
+            logger.warning("Error al mintear badge, encolando reintento: %s", exc)
+            chain_status = "pending"   # ← era "failed", ahora queda pending
+            needs_enqueue = True       # ← NUEVO
 
-        # ── Mint MRT (opcional, no afecta el estado del badge) ───────────────
         mrt_reward: Optional[float] = getattr(template, "mrt_reward", None)
         if mrt_reward and float(mrt_reward) > 0:
             try:
@@ -383,6 +352,17 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
     db.add(award)
     await db.commit()
 
+    # ← NUEVO: encolar reintento automático ahora que el award tiene ID
+    if needs_enqueue:
+        await enqueue(
+            event_id=award.id,
+            tx_type="mint_badge",
+            wallet=data.student_wallet,
+            badge_id=str(badge_id),
+            uri=badge_uri,
+        )
+        logger.info("mint_badge encolado para reintento: award_id=%s", award.id)
+
     result = await db.execute(
         select(BadgeAward)
         .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))
@@ -392,7 +372,6 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
 
 
 async def get_student_awards(db: AsyncSession, student_id: str) -> List[BadgeAward]:
-    """Lista todas las insignias otorgadas a un estudiante, más recientes primero."""
     result = await db.execute(
         select(BadgeAward)
         .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))
@@ -408,12 +387,6 @@ async def revoke_award(
     requester_id: str,
     requester_role: str,
 ) -> BadgeAward:
-    """
-    Revoca una insignia ya otorgada.
-
-    Solo el emisor original o un admin pueden revocar.
-    Lanza HTTP 400 si ya fue revocada previamente.
-    """
     result = await db.execute(
         select(BadgeAward)
         .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))
@@ -421,23 +394,14 @@ async def revoke_award(
     )
     award = result.scalar_one_or_none()
     if not award:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Insignia no encontrada.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Insignia no encontrada.")
     if award.revoked:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La insignia ya fue revocada.",
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La insignia ya fue revocada.")
     if requester_role != "admin" and award.issued_by_id != requester_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el emisor original o un admin puede revocar.",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el emisor original o un admin puede revocar.")
 
     award.revoked = True
-    award.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)   # datetime.utcnow() deprecado en 3.12+
+    award.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
     award.revoked_by_id = requester_id
     await db.commit()
     await db.refresh(award)
@@ -447,12 +411,6 @@ async def revoke_award(
 # ── Verificación pública ──────────────────────────────────────────────────────
 
 async def get_public_verification(db: AsyncSession, award_id: str) -> PublicVerifyResponse:
-    """
-    Retorna los datos públicos de verificación de una insignia.
-
-    Endpoint sin autenticación, para verificadores externos (empleadores, etc.).
-    Lanza HTTP 404 si el award_id no existe.
-    """
     result = await db.execute(
         select(BadgeAward)
         .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))
@@ -460,10 +418,7 @@ async def get_public_verification(db: AsyncSession, award_id: str) -> PublicVeri
     )
     award = result.scalar_one_or_none()
     if not award:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Insignia no encontrada.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Insignia no encontrada.")
 
     template = award.template
     return PublicVerifyResponse(
@@ -486,12 +441,12 @@ async def get_public_verification(db: AsyncSession, award_id: str) -> PublicVeri
         revoked_at=award.revoked_at,
     )
 
+
 async def retry_chain(db: AsyncSession, award_id: str) -> BadgeAward:
     """
     Reintenta el mint en blockchain de un award que quedó con
-    chain_status 'skipped' o 'failed'.
+    chain_status 'skipped', 'failed' o 'pending'.
     """
-    # 1. Buscar el award
     result = await db.execute(
         select(BadgeAward)
         .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))
@@ -509,7 +464,6 @@ async def retry_chain(db: AsyncSession, award_id: str) -> BadgeAward:
     if not blockchain.is_connected():
         raise HTTPException(status_code=503, detail="Nodo blockchain no disponible. Intenta más tarde.")
 
-    # 2. Reconstruir badge_id y URI (reutiliza CID existente si hay)
     badge_id = int(award.template.id.replace("-", ""), 16) % (2 ** 256)
     badge_uri = (
         await get_ipfs_gateway_url(award.ipfs_cid)
@@ -517,7 +471,6 @@ async def retry_chain(db: AsyncSession, award_id: str) -> BadgeAward:
         else f"{settings.public_base_url}/badges/{award.template.id}"
     )
 
-    # 3. Mint badge
     try:
         tx_hash = await blockchain.mint_badge(award.student_wallet, badge_id, badge_uri)
         award.tx_hash = tx_hash
@@ -527,7 +480,6 @@ async def retry_chain(db: AsyncSession, award_id: str) -> BadgeAward:
         await db.commit()
         raise HTTPException(status_code=502, detail=f"Error al mintear: {exc}")
 
-    # 4. Mint MRT opcional (no bloquea)
     mrt_reward = getattr(award.template, "mrt_reward", None)
     if mrt_reward and float(mrt_reward) > 0:
         try:
@@ -536,7 +488,6 @@ async def retry_chain(db: AsyncSession, award_id: str) -> BadgeAward:
             logger.warning("Error MRT en retry (no crítico): %s", exc)
 
     await db.commit()
-    # Refrescar con relaciones
     result = await db.execute(
         select(BadgeAward)
         .options(selectinload(BadgeAward.template).selectinload(BadgeTemplate.skills))

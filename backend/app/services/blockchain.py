@@ -202,6 +202,18 @@ class BlockchainService:
 
             except Exception as exc:
                 last_exc = exc
+                # Si la tx ya existe en el mempool/cadena, recuperar el hash
+                if "Known transaction" in str(exc):
+                    try:
+                        confirmed_nonce = self.w3.eth.get_transaction_count(self._account.address, 'latest')
+                        block = self.w3.eth.get_block(self.w3.eth.block_number, full_transactions=True)
+                        for tx in block.transactions:
+                            if tx['from'].lower() == self._account.address.lower() \
+                            and tx['nonce'] == confirmed_nonce - 1:
+                                logger.info("Tx ya conocida, recuperando hash: %s", tx['hash'].hex())
+                                return tx['hash'].hex()
+                    except Exception:
+                        pass  # Si falla la recuperación, continuar con retry normal
                 if attempt < _MAX_RETRIES:
                     delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
                     await asyncio.sleep(delay)
