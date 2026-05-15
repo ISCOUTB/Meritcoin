@@ -159,7 +159,33 @@ Instala estas herramientas antes de comenzar:
 > registro por defecto de npm.
 
 ---
+### ⚡ Opción rápida — script automático
 
+Si tu entorno tiene todos los [requisitos previos](#requisitos-previos), puedes
+levantar todo el sistema con un solo comando:
+
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+El script ejecuta los 7 pasos en orden, espera a que cada servicio esté listo
+y al final muestra las direcciones de los contratos y las URLs de acceso.
+
+> ⚠️ **Si el script falla en algún paso**, continúa desde ese punto con la guía
+> manual que encontrarás a continuación. El script no hace nada que no puedas
+> hacer a mano — simplemente automatiza la secuencia.
+
+> ℹ️ **Linux:** si `host.docker.internal` no resuelve, agrega `extra_hosts` al
+> servicio `backend` en `docker-compose.yml` antes de correr el script:
+> ```yaml
+> extra_hosts:
+>   - "host.docker.internal:host-gateway"
+> ```
+
+---
+
+### Guía manual paso a paso
 ## Inicio rápido (orden obligatorio)
 
 Sigue los pasos **exactamente en este orden**. Si los mezclas, el backend
