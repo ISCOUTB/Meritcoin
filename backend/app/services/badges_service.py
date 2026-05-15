@@ -306,14 +306,6 @@ async def award_badge(db: AsyncSession, data: BadgeAwardCreate) -> BadgeAward:
       4. Guardar el BadgeAward en BD.
     """
 
-    cid: Optional[str] = None
-    try:
-        cid = await upload_json_to_ipfs(badge_metadata)
-        badge_uri = await get_ipfs_gateway_url(cid)
-    except Exception as exc:
-        logger.warning("IPFS no disponible, usando URI fallback: %s", exc)
-        badge_uri = f"{settings.public_base_url}/badges/{data.template_id}"
-
     template = await get_template(db, data.template_id)
     if not template.is_active:
         raise HTTPException(
