@@ -253,6 +253,8 @@
                COMMENT="Clase FontAwesome (ej: fa-star, fa-crown)"/>
         <FIELD NAME="image_url"   TYPE="char" LENGTH="500" NOTNULL="false"
                COMMENT="URL de imagen decorativa opcional"/>
+        <FIELD NAME="backend_id"  TYPE="char" LENGTH="255" NOTNULL="false" DEFAULT=""
+               COMMENT="UUID del tipo de insignia en el backend MeritCoin"/>
         <FIELD NAME="is_system"   TYPE="int"  LENGTH="1"   NOTNULL="true" DEFAULT="0"
                COMMENT="1 = tipo base no eliminable, 0 = personalizado"/>
         <FIELD NAME="enabled"     TYPE="int"  LENGTH="1"   NOTNULL="true" DEFAULT="1"
