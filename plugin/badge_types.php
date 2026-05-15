@@ -81,7 +81,34 @@ if ($action === 'save_new' && confirm_sesskey()) {
         );
     }
 
-    $DB->insert_record('local_meritcoin_badge_types', $rec);
+    $newid = $DB->insert_record('local_meritcoin_badge_types', $rec);
+
+    // ── Sincronizar con backend ───────────────────────────────────────
+    $api_url = get_config('local_meritcoin', 'api_url') ?: 'http://172.19.0.6:8000';
+    $payload = json_encode([
+        'name'            => $rec->name,
+        'description'     => $rec->description,
+        'criteria'        => $rec->criteria ? [$rec->criteria] : [],
+        'mrt_reward'      => 0,
+        'created_by_id'   => (string)$USER->id,
+        'created_by_role' => 'teacher',
+    ]);
+    $ch = curl_init("{$api_url}/badges/templates");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT        => 10,
+    ]);
+    $resp = curl_exec($ch);
+    curl_close($ch);
+    $api_response = $resp ? json_decode($resp) : null;
+    if (!empty($api_response->id)) {
+        $DB->set_field('local_meritcoin_badge_types', 'backend_id', $api_response->id, ['id' => $newid]);
+    }
+    // ─────────────────────────────────────────────────────────────────
+
     redirect(
         new moodle_url('/local/meritcoin/badge_types.php'),
         get_string('badge_type_created', 'local_meritcoin'),
