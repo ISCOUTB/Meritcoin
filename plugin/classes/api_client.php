@@ -18,6 +18,9 @@ namespace local_meritcoin;
 
 defined('MOODLE_INTERNAL') || die();
 
+global $CFG;
+require_once($CFG->libdir . '/filelib.php');
+
 /**
  * HTTP client for communicating with the MeritCoin FastAPI backend.
  *

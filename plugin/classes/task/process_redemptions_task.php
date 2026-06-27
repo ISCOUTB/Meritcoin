@@ -3,6 +3,9 @@ namespace local_meritcoin\task;
 
 defined('MOODLE_INTERNAL') || die();
 
+global $CFG;
+require_once($CFG->dirroot . '/local/meritcoin/lib.php');
+
 class process_redemptions_task extends \core\task\scheduled_task {
 
     /** Máximo de intentos antes de abandonar un canje. */

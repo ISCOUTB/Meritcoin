@@ -70,7 +70,7 @@ services:
       # IMPORTANTE: Moodle DEBE haber completado la instalación inicial
       # antes de montar este volumen. Si es la primera vez que levantas
       # Moodle, comenta esta línea, deja que instale, luego descomenta.
-      #- ./plugin:/bitnami/moodle/local/meritcoin
+      - ./plugin:/bitnami/moodle/local/meritcoin
     networks:
       - meritcoin-net
     entrypoint:

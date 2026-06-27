@@ -95,7 +95,7 @@ echo $OUTPUT->header();
 
 <div class="mrt-dashboard container-fluid px-4 py-3">
 
-  <?php if (!$backend['backend_available']): ?>
+  <?php if (!empty($wallet) && !$backend['backend_available']): ?>
     <div class="alert alert-warning d-flex align-items-center gap-2 mb-4" role="alert">
       <i class="fa fa-exclamation-triangle"></i>
       <span><?= get_string('backendunavailable', 'local_meritcoin') ?></span>
@@ -149,7 +149,7 @@ echo $OUTPUT->header();
           </div>
           <div class="mrt-wallet-full text-muted" style="font-size:0.72em;"><?= s($wallet) ?></div>
         <?php else: ?>
-          <span class="badge bg-secondary"><?= get_string('no_wallet', 'local_meritcoin') ?></span>
+          <span class="badge bg-secondary"><?= get_string('no_wallet', 'local_meritcoin', get_config('local_meritcoin', 'wallet_field') ?: 'wallet') ?></span>
         <?php endif; ?>
       </div>
     </div>

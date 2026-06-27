@@ -159,29 +159,27 @@ Instala estas herramientas antes de comenzar:
 > registro por defecto de npm.
 
 ---
-### ⚡ Opción rápida — script automático
+### ⚡ Opción rápida — script automático (Recomendado)
 
 Si tu entorno tiene todos los [requisitos previos](#requisitos-previos), puedes
-levantar todo el sistema con un solo comando:
+levantar y configurar todo el sistema automáticamente con un solo comando:
 
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-El script ejecuta los 7 pasos en orden, espera a que cada servicio esté listo
-y al final muestra las direcciones de los contratos y las URLs de acceso.
+El script realiza de forma 100% automatizada los siguientes pasos:
+1. Crea y sincroniza todos los archivos `.env` (raíz, `backend/` y `contracts/`), autogenerando claves y extrayendo las llaves privadas directamente de los nodos Besu activos para evitar cualquier desincronización de credenciales.
+2. Inicia los servicios de Docker (Besu, Postgres, IPFS, MariaDB y Moodle).
+3. Compila y despliega los Smart Contracts en la red privada.
+4. Vincula y configura el plugin en Moodle (URL del backend, secreto HMAC, etc.) vía CLI.
+5. Configura la seguridad cURL de Moodle para permitir peticiones al puerto `8000` y al host `meritcoin-backend` (previniendo errores de SSRF).
+6. Crea de forma automática el campo de perfil `wallet` para los estudiantes en la base de datos de Moodle.
 
-> ⚠️ **Si el script falla en algún paso**, continúa desde ese punto con la guía
-> manual que encontrarás a continuación. El script no hace nada que no puedas
-> hacer a mano — simplemente automatiza la secuencia.
+Al finalizar, mostrará las direcciones de los contratos y las URLs de acceso listas para usarse.
 
-> ℹ️ **Linux:** si `host.docker.internal` no resuelve, agrega `extra_hosts` al
-> servicio `backend` en `docker-compose.yml` antes de correr el script:
-> ```yaml
-> extra_hosts:
->   - "host.docker.internal:host-gateway"
-> ```
+> ⚠️ **Si el script falla en algún paso**, puedes continuar de forma manual con la guía que encontrarás a continuación.
 
 ---
 
@@ -272,11 +270,12 @@ WALLET_ENCRYPTION_KEY=tu-clave-fernet-aqui   # ⚠️ el backend no arranca sin 
 
 HMAC_SECRET=cambia-este-secreto              # cualquier string largo y aleatorio
 
-# Clave privada de la cuenta deployer (cuenta #0 del génesis de Besu)
+# Clave privada de la cuenta deployer.
+# Extrae esta clave directamente de: besu/QBFT-Network/Node-1/data/key
 # Esta cuenta también actúa como SIGNER del backend para firmar transacciones.
 # Solo para desarrollo local. Nunca uses esta clave en producción.
-DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-BACKEND_SIGNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+DEPLOYER_PRIVATE_KEY=0xYOUR_NODE_1_PRIVATE_KEY
+BACKEND_SIGNER_PRIVATE_KEY=0xYOUR_NODE_1_PRIVATE_KEY
 ```
 
 > `WALLET_ENCRYPTION_KEY` cifra las claves privadas de las wallets custodiales
@@ -531,9 +530,20 @@ Ve a: **Administración del sitio → Plugins → Plugins locales → MeritCoin*
 
 > Usa `http://meritcoin-backend:8000` (nombre del servicio Docker) cuando
 > **ambos** contenedores (Moodle y backend) están en el mismo Docker Compose.
-> Usa `http://host.docker.internal:8000` solo si corres el backend fuera de Docker.
 
-#### 7.4 Crear el campo de perfil de wallet (para cursos no piloto)
+#### 7.4 Configurar la Seguridad de cURL (Esencial para evitar "The URL is blocked")
+
+Dado que Moodle y el backend se comunican dentro de la red privada de Docker, cURL bloqueará las peticiones por defecto para prevenir ataques SSRF. Debes permitir el host y el puerto:
+
+1. Ve a: **Administración del sitio → Seguridad → Seguridad HTTP**.
+2. Modifica los siguientes parámetros:
+   - **Deshabilitar seguridad cURL** (`curlsecurityenabled`): Puedes desactivarla temporalmente para desarrollo desmarcando la casilla.
+   - *O de forma más segura*:
+     - **Lista de puertos permitidos de cURL** (`curlsecurityallowedport`): Añade `8000` (ej: `80\n443\n8000`).
+     - **Lista de hosts permitidos de cURL** (`curlsecurityallowedhosts`): Añade `meritcoin-backend`.
+3. Guarda los cambios.
+
+#### 7.5 Crear el campo de perfil de wallet (para cursos no piloto)
 
 1. **Administración del sitio → Usuarios → Campos de perfil de usuario**
 2. Agrega un campo de tipo **Entrada de texto**:
